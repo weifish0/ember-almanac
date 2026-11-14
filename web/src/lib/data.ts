@@ -17,6 +17,7 @@ export type Validation = {
   raw_totals_by_year: Record<string, { terra: number; aqua: number; viirs: number }>
   coverage: { sat: string; first: string; last: string; detections: number }[]
   last_date: string
+  final_fit_years?: [number, number]
 }
 export type Meta = {
   res: number

@@ -104,6 +104,7 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
   const mapRef = useRef<maplibregl.Map | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const geom = useRef<{ x: Uint16Array; y0: Uint16Array; y1: Uint16Array; peak: Uint8Array; annual: Float32Array; lookup: Map<number, number> } | null>(null)
+  const paintToken = useRef(0)
   const drawingRef = useRef(drawing)
   const cb = useRef({ onBBox, onHover })
   cb.current = { onBBox, onHover }
@@ -130,7 +131,10 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
     map.touchZoomRotate.disableRotation()
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
     mapRef.current = map
-    map.on('load', () => {
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ember = { map, canvas }
+    // Add the fire layer as soon as the style itself is parsed - don't wait for every basemap tile.
+    const addFire = () => {
+      if (!map.getStyle() || map.getSource('fire')) return
       map.addSource('fire', {
         type: 'canvas',
         canvas,
@@ -138,8 +142,11 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
         coordinates: [[-180, LAT_N], [180, LAT_N], [180, LAT_S], [-180, LAT_S]],
       })
       map.addLayer({ id: 'fire', type: 'raster', source: 'fire', paint: { 'raster-resampling': 'nearest', 'raster-fade-duration': 0, 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.94, 6.5, 0.72] } }, 'coast')
+      map.off('styledata', addFire)
       map.fire('fire-ready')
-    })
+    }
+    map.on('styledata', addFire)
+    addFire()
 
     // rectangle drawing (button, or shift + drag)
     let start: maplibregl.LngLat | null = null
@@ -222,6 +229,7 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
     const canvas = canvasRef.current
     const g = geom.current
     if (!map || !canvas || !clim || !g) return
+    const token = ++paintToken.current
     const paint = () => {
       const ctx = canvas.getContext('2d')!
       const img = ctx.createImageData(CW, CH)
@@ -253,8 +261,15 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
       ctx.putImageData(img, 0, 0)
       const s = map.getSource('fire') as CanvasSource | undefined
       if (s) {
+        // a static canvas source only re-uploads its texture while "playing": keep it playing for a few frames
         s.play()
-        map.once('render', () => s.pause())
+        let frames = 0
+        const stop = () => {
+          if (++frames < 4) return
+          map.off('render', stop)
+          if (token === paintToken.current) s.pause()
+        }
+        map.on('render', stop)
         map.triggerRepaint()
       }
     }
@@ -267,8 +282,8 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
     const map = mapRef.current
     if (!map) return
     const set = () => (map.getSource('aoi') as GeoJSONSource | undefined)?.setData(bbox ? rect(bbox) : { type: 'FeatureCollection', features: [] })
-    if (map.isStyleLoaded()) set()
-    else map.once('load', set)
+    if (map.getStyle() && map.getSource('aoi')) set()
+    else map.once('styledata', set)
   }, [bbox])
 
   useEffect(() => {

@@ -226,7 +226,9 @@ select { background: var(--paper); border: 1px solid var(--rule); border-radius:
   .app { grid-template-columns: 1fr; grid-template-rows: 46dvh auto; height: auto; min-height: 100dvh; }
   .panel { overflow: visible; border-left: 0; border-top: 1px solid var(--rule); }
   .masthead { grid-template-columns: 1fr; }
-  .months button { min-width: 0; padding: 5px 5px; font-size: 11px; }
+  .plate-top { left: 10px; right: 10px; top: 10px; gap: 6px; }
+  .months { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .months button { min-width: 0; padding: 5px 4px; font-size: 11px; flex: none; }
   .months.wheel span { width: 26px; font-size: 10px; }
   .plate-bottom { right: 56px; }
   .readout { display: none; }

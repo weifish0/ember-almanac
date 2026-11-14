@@ -46,7 +46,7 @@ export default function App() {
   const [progress, setProgress] = useState<[number, number] | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [year, setYear] = useState<number | null>(null)
-  const [smooth, setSmooth] = useState(false)
+  const [smooth, setSmooth] = useState(true)
   const [hover, setHover] = useState<{ value: number; peak: number } | null>(null)
   const panel = useRef<HTMLDivElement>(null)
   const req = useRef(0)
@@ -368,8 +368,8 @@ function Report(p: {
         <div className="sec-head">
           <h2>Burning calendar</h2>
           <div className="seg small">
-            <button aria-selected={!p.smooth} onClick={() => p.setSmooth(false)}>Daily</button>
             <button aria-selected={p.smooth} onClick={() => p.setSmooth(true)}>7-day mean</button>
+            <button aria-selected={!p.smooth} onClick={() => p.setSmooth(false)}>Daily</button>
           </div>
         </div>
         <p className="sec-note">Each row is a year, each mark a day. Darker means more fire. Click a year to inspect it.</p>

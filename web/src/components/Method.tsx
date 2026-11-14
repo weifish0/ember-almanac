@@ -68,7 +68,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
             </p>
           )}
           <p className="proof-note quiet">
-            Limits: a detection is a hot pixel at overpass time, not a fire or a burned area; cloud and smoke hide fires from both sensors; pre-2012 values are estimates and carry the interval shown in the yearly chart. Data: NASA FIRMS archive, {v.coverage.reduce((s, c) => s + c.detections, 0).toLocaleString()} screened detections through {v.last_date}.
+            Limits: a detection is a hot pixel at overpass time, not a fire or a burned area; cloud and smoke hide fires from both sensors. Harmonization restores how much burned, not the exact day: MODIS misses small fires outright, so read pre-2012 at weekly scale or coarser, with the interval shown in the yearly chart. Ratios are learned from {v.final_fit_years ? `${v.final_fit_years[0]}–${v.final_fit_years[1]}` : 'the overlap years'}, before Terra and Aqua began drifting from their nominal orbits. Data: NASA FIRMS archive, {v.coverage.reduce((s, c) => s + c.detections, 0).toLocaleString()} screened detections through {v.last_date}.
           </p>
         </div>
       </div>
