@@ -29,7 +29,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
             <div><b>Borrow strength, don’t guess.</b> Cells with few fires lean on their 1° neighbourhood, then their 5° block, then the global rate — a gamma-Poisson shrinkage, so sparse places get a stable ratio and busy places keep their own.</div>
           </li>
           <li>
-            <div><b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows VIIRS as observed{meta.viirsGapDays?.length ? `, except ${meta.viirsGapDays.length} days when VIIRS was not observing (the July–August 2022 outage), which MODIS fills the same way` : ''}. Raw counts stay one hover away.</div>
+            <div><b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows VIIRS as observed{meta.viirsGapDays?.length ? `, except ${meta.viirsGapDays.length} days when VIIRS was not observing (the longest run: 27 July–10 August 2022), which MODIS fills the same way` : ''}. Raw counts stay one hover away.</div>
           </li>
         </ol>
         <div className="proof">
@@ -54,7 +54,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
                   <tr key={k} className={k === 'hierarchical' ? 'ours' : ''}>
                     <td>{label}<small>{note}</small></td>
                     <td>{a.mdape.toFixed(0)}%</td>
-                    <td>{a.bias_pct > 0 ? '+' : '−'}{Math.abs(a.bias_pct).toFixed(0)}%</td>
+                    <td>{a.bias_pct > 0 ? '+' : '−'}{Math.abs(a.bias_pct).toFixed(Math.abs(a.bias_pct) < 1 ? 1 : 0)}%</td>
                     <td>{b.within_25pct.toFixed(0)}%</td>
                   </tr>
                 )
@@ -63,7 +63,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
           </table>
           {ours && rawBias !== undefined && (
             <p className="proof-note">
-              Splicing the raw records would understate pre-2012 fire by {Math.abs(rawBias).toFixed(0)}%. After harmonization the residual bias is {Math.abs(ours.bias_pct).toFixed(0)}%.
+              Splicing the raw records would understate pre-2012 fire by {Math.abs(rawBias).toFixed(0)}%. After harmonization the residual bias is {Math.abs(ours.bias_pct).toFixed(Math.abs(ours.bias_pct) < 1 ? 1 : 0)}%.
               {series && Number.isFinite(series.meanRatio) ? ` In the area you selected the applied ratio averages ${series.meanRatio.toFixed(2)}.` : ''}
             </p>
           )}

@@ -10,73 +10,73 @@
    "year": 2001,
    "modis": 1624834,
    "viirs": 0,
-   "harm": 19297227
+   "harm": 19320848
   },
   {
    "year": 2002,
    "modis": 3430388,
    "viirs": 0,
-   "harm": 19056341
+   "harm": 19080959
   },
   {
    "year": 2003,
    "modis": 4780434,
    "viirs": 0,
-   "harm": 19199778
+   "harm": 19232003
   },
   {
    "year": 2004,
    "modis": 4711591,
    "viirs": 0,
-   "harm": 18931541
+   "harm": 18966076
   },
   {
    "year": 2005,
    "modis": 4746430,
    "viirs": 0,
-   "harm": 19041156
+   "harm": 19072779
   },
   {
    "year": 2006,
    "modis": 4341406,
    "viirs": 0,
-   "harm": 17429687
+   "harm": 17457962
   },
   {
    "year": 2007,
    "modis": 4781819,
    "viirs": 0,
-   "harm": 19148851
+   "harm": 19184158
   },
   {
    "year": 2008,
    "modis": 4494568,
    "viirs": 0,
-   "harm": 17886506
+   "harm": 17917516
   },
   {
    "year": 2009,
    "modis": 4153508,
    "viirs": 0,
-   "harm": 16701709
+   "harm": 16737493
   },
   {
    "year": 2010,
    "modis": 4390469,
    "viirs": 0,
-   "harm": 17677223
+   "harm": 17710650
   },
   {
    "year": 2011,
    "modis": 4366037,
    "viirs": 0,
-   "harm": 17481381
+   "harm": 17513168
   },
   {
    "year": 2012,
    "modis": 4589409,
    "viirs": 17359135,
-   "harm": 18327015
+   "harm": 18555391
   },
   {
    "year": 2013,
@@ -130,38 +130,38 @@
    "year": 2021,
    "modis": 3997782,
    "viirs": 16690230,
-   "harm": 16690230
+   "harm": 16775237
   },
   {
    "year": 2022,
    "modis": 3447676,
    "viirs": 13950450,
-   "harm": 13950450
+   "harm": 14831415
   },
   {
    "year": 2023,
    "modis": 4244735,
    "viirs": 18022140,
-   "harm": 18022140
+   "harm": 18190041
   },
   {
    "year": 2024,
    "modis": 4424121,
    "viirs": 17424488,
-   "harm": 17424488
+   "harm": 18949404
   },
   {
    "year": 2025,
    "modis": 3334071,
    "viirs": 14907462,
-   "harm": 14907462
+   "harm": 15046049
   }
  ],
  "validation": {
-  "ratio": 4.082,
-  "reg_year_mdape": 10.3,
-  "bias": 0.8,
-  "raw_bias": -75.2,
+  "ratio": 4.09,
+  "reg_year_mdape": 10.1,
+  "bias": 0.4,
+  "raw_bias": -75.3,
   "detections": 333901564
  }
 }

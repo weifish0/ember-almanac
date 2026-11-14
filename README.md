@@ -49,12 +49,12 @@ Validation is a **backcast**, the same direction as the real task. Ratios are le
 | Method | Typical error, 1° cell × month | Overall bias | Within ±25%, 5° block × year |
 |---|---|---|---|
 | Splice the raw counts | 77% | −75% | 0% |
-| One global scale factor | 35% | +2% | 49% |
-| **Ember Almanac** | **26%** | **+1%** | **74%** |
+| One global scale factor | 35% | +1% | 50% |
+| **Ember Almanac** | **26%** | **+0.4%** | **74%** |
 
 At the scale of a region and a year (5° block), the typical error is **10%**. Typical error is the median absolute percentage error over units with at least 20 VIIRS detections. Much of what remains at fine scales is counting noise: a 1° cell with 20 VIIRS detections in a month has about five MODIS detections to estimate from.
 
-Applied to the drift years 2022–2025 as a stress test, the same model gives 30% typical error at 1° × month and −2% bias.
+Applied to the drift years 2022–2025 as a stress test, the same model gives 29% typical error at 1° × month and −6% bias, which is why those years are kept out of the fit.
 
 The yearly chart in the app carries an 80% interval on every pre-2012 bar, taken from the empirical error of the backcast at a similar magnitude.
 
@@ -63,7 +63,7 @@ The yearly chart in the app carries an 80% interval on every pre-2012 bar, taken
 - A detection is a hot pixel at overpass time. It is not a fire count and not a burned area.
 - Cloud and thick smoke hide fires from both sensors.
 - Harmonization restores *how much* burned, not the exact day. MODIS misses small fires outright, so the pre-2012 record should be read at weekly scale or coarser.
-- VIIRS itself has gaps. S-NPP returned no fire data from 27 July to 10 August 2022; the pipeline detects such days (global VIIRS/MODIS ratio below 2) and fills them from MODIS the same way as the pre-VIIRS era, flagged as estimates.
+- VIIRS itself has gaps. S-NPP returned no fire data from 27 July to 10 August 2022, for example. The pipeline detects such days (global VIIRS/MODIS ratio below 2; 55 days in all) and fills them from MODIS the same way as the pre-VIIRS era, flagged as estimates.
 - The archive used here ends on 31 December 2025.
 
 ## NASA data used
