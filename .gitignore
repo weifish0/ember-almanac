@@ -11,3 +11,4 @@ __pycache__/
 # video working files
 video/public/cap/
 video/out/
+video/public/vo/

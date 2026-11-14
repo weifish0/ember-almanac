@@ -130,6 +130,14 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
     })
     map.touchZoomRotate.disableRotation()
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+    // keep the attribution collapsed to its (i) button so it never covers the legend
+    const collapse = () => {
+      const a = el.current?.querySelector('.maplibregl-ctrl-attrib')
+      a?.classList.remove('maplibregl-compact-show')
+      a?.removeAttribute('open')
+    }
+    map.once('styledata', collapse)
+    map.once('load', collapse)
     mapRef.current = map
     // handle for scripted screenshots (video/scripts/capture.mjs)
     ;(window as unknown as Record<string, unknown>).__emberMap = map
