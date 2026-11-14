@@ -131,7 +131,7 @@ export default function App() {
     const rows = ['date,terra_modis,aqua_modis,snpp_viirs,harmonized_viirs_equivalent,is_estimate']
     for (let d = meta.firstDay; d <= meta.lastDay; d++) {
       const iso = dayToDate(d).toISOString().slice(0, 10)
-      rows.push(`${iso},${series.terra[d]},${series.aqua[d]},${series.viirs[d]},${series.harm[d].toFixed(2)},${d < meta.viirsStartDay ? 1 : 0}`)
+      rows.push(`${iso},${series.terra[d]},${series.aqua[d]},${series.viirs[d]},${series.harm[d].toFixed(2)},${series.est[d]}`)
     }
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }))

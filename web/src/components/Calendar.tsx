@@ -142,7 +142,8 @@ export function Calendar({ meta, series, almanac, smooth, year, onYear }: Props)
   if (tip) {
     const d = dateToDay(tip.year, 0, 1) + tip.doy + (isLeap(tip.year) && tip.doy >= 59 ? 1 : 0)
     const inRange = d >= meta.firstDay && d <= meta.lastDay
-    const est = d < meta.viirsStartDay
+    const est = inRange ? series.est[d] === 1 : false
+    const outage = est && d >= meta.viirsStartDay
     tipBody = (
       <div className="tip" style={{ left: Math.min(width - 190, Math.max(0, tip.x - 90)), top: tip.y + 18 }}>
         <strong>
@@ -154,7 +155,7 @@ export function Calendar({ meta, series, almanac, smooth, year, onYear }: Props)
               {fmt(series.harm[d])} <small>{est ? 'VIIRS-equivalent (estimated)' : 'VIIRS detections'}</small>
             </span>
             <span className="tip-raw">
-              raw · Terra {series.terra[d]} · Aqua {d >= meta.aquaStartDay ? series.aqua[d] : '—'} · VIIRS {est ? '—' : series.viirs[d]}
+              raw · Terra {series.terra[d]} · Aqua {d >= meta.aquaStartDay ? series.aqua[d] : '—'} · VIIRS {outage ? 'outage' : est ? '—' : series.viirs[d]}
             </span>
           </>
         ) : (

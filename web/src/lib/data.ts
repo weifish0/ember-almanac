@@ -18,6 +18,7 @@ export type Validation = {
   coverage: { sat: string; first: string; last: string; detections: number }[]
   last_date: string
   final_fit_years?: [number, number]
+  ratio_spread?: { p05: number; p50: number; p95: number }
 }
 export type Meta = {
   res: number
@@ -31,6 +32,8 @@ export type Meta = {
   aquaStartDay: number
   viirsStartDay: number
   climYears: [number, number]
+  /** days when VIIRS was not observing (sensor outage); filled from MODIS like the pre-VIIRS era */
+  viirsGapDays?: number[]
   tiles: Record<string, [number, number]>
   validation: Validation
   generated: string
@@ -193,7 +196,8 @@ export type Series = {
   viirs: Float32Array
   /** harmonized, VIIRS-equivalent detections per day */
   harm: Float32Array
-  /** share of each day's harmonized value that is a model estimate (pre-VIIRS) - 0 or 1 by era */
+  /** 1 where the harmonized value is a MODIS-based estimate (pre-VIIRS era, or a VIIRS outage day) */
+  est: Uint8Array
   cellsWithFire: number
   cellsTotal: number
   records: number
@@ -208,6 +212,9 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
   const aqua = new Float32Array(nDays)
   const viirs = new Float32Array(nDays)
   const harm = new Float32Array(nDays)
+  const est = new Uint8Array(nDays)
+  est.fill(1, 0, Math.min(nDays, meta.viirsStartDay))
+  for (const d of meta.viirsGapDays ?? []) if (d < nDays) est[d] = 1
   const res = meta.res
   const tc = meta.tileCells
   const x0 = Math.round((bbox[0] + 180) / res)
@@ -242,7 +249,7 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
           terra[d] += t
           aqua[d] += a
           viirs[d] += v
-          if (d >= meta.viirsStartDay) harm[d] += v
+          if (!est[d]) harm[d] += v
           else if (d >= meta.aquaStartDay) {
             const h = (tile.rta[r0 + month[d]] / 100) * (t + a)
             harm[d] += h
@@ -261,6 +268,7 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
     aqua,
     viirs,
     harm,
+    est,
     cellsWithFire,
     cellsTotal: (x1 - x0) * (y1 - y0),
     records,

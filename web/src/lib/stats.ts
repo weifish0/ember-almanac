@@ -176,7 +176,7 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
     const d1 = Math.min(meta.lastDay, dateToDay(y, 11, 31))
     for (let d = d0; d <= d1; d++) {
       total += s.harm[d]
-      if (d < meta.viirsStartDay) estimated += s.harm[d]
+      if (s.est[d]) estimated += s.harm[d]
       rawModis += s.terra[d] + s.aqua[d]
       rawViirs += s.viirs[d]
     }

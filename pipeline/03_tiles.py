@@ -5,7 +5,7 @@ Outputs (web/public/data):
                           the *raw* daily detection counts of Terra, Aqua and S-NPP plus that cell's 12 monthly
                           ratios. The browser applies the harmonization itself, so nothing is hidden.
   clim.bin.gz             harmonized monthly climatology for the whole planet (the map layer)
-  meta.json               grid definition, sensor eras, tile index, validation report
+  meta.json               grid definition, sensor eras, VIIRS outage days, tile index, validation report
 
 Tile layout (little endian, before gzip):
   u32 magic 'EMB1' | u16 nCells | u16 0
@@ -134,6 +134,7 @@ def main():
         "viirsStartDay": (VIIRS_START - EPOCH).days,
         "firstDay": (dt.date.fromisoformat(min(c["first"] for c in report["coverage"])) - EPOCH).days,
         "climYears": [first_year, last_year],
+        "viirsGapDays": [(dt.date.fromisoformat(d) - EPOCH).days for d in report.get("viirs_gap_days", [])],
         "tiles": index,
         "validation": report,
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),

@@ -38,7 +38,27 @@ K_GRID = [10, 30, 100, 300]
 STABLE_UNTIL = 2021         # last year before Terra/Aqua orbit drift affects detections
 
 
-def build_monthly(con) -> pd.DataFrame:
+def find_viirs_gaps(con) -> list[str]:
+    """Days when S-NPP VIIRS returned (almost) nothing while MODIS kept seeing fire - sensor outages.
+
+    The global VIIRS/MODIS ratio sits near 4 every day; a day below 2 means VIIRS was not observing
+    (e.g. the S-NPP safe-mode outage of 27 Jul - 10 Aug 2022). Those days are treated like the pre-VIIRS
+    era: excluded from the fit and filled with MODIS x ratio.
+    """
+    rows = con.execute(
+        f"""
+        SELECT date FROM (
+          SELECT date, sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS v,
+                       sum(CASE WHEN sat <> 'N' THEN n ELSE 0 END) AS m
+          FROM read_parquet('{AGG}/*.parquet') WHERE date >= DATE '{VIIRS_START}' GROUP BY date)
+        WHERE v < 2.0 * m ORDER BY date
+        """
+    ).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def build_monthly(con, gaps: list[str]) -> pd.DataFrame:
+    gap_sql = ", ".join(f"DATE '{d}'" for d in gaps) or "DATE '1900-01-01'"
     con.execute(
         f"""
         CREATE OR REPLACE TABLE monthly AS
@@ -46,7 +66,7 @@ def build_monthly(con) -> pd.DataFrame:
                CAST(year(date) AS SMALLINT) AS year,
                CAST(month(date) AS TINYINT) AS month,
                CAST(CASE WHEN date < DATE '{AQUA_START}' THEN 0
-                         WHEN date < DATE '{VIIRS_START}' THEN 1 ELSE 2 END AS TINYINT) AS era,
+                         WHEN date < DATE '{VIIRS_START}' OR date IN ({gap_sql}) THEN 1 ELSE 2 END AS TINYINT) AS era,
                CAST(sum(CASE WHEN sat = 'T' THEN n ELSE 0 END) AS INTEGER) AS t,
                CAST(sum(CASE WHEN sat = 'A' THEN n ELSE 0 END) AS INTEGER) AS a,
                CAST(sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS INTEGER) AS v
@@ -129,10 +149,12 @@ def main():
     con.execute("SET threads TO 24")
     if "--from-monthly" in sys.argv:   # quick local iteration without the gridded daily files
         m = con.execute(f"SELECT * FROM '{WORK}/monthly.parquet'").df()
-        prev = json.loads((WORK / "validation.json").read_text())["coverage"]
-        cov = [(c["sat"], c["first"], c["last"], c["detections"]) for c in prev]
+        prev_report = json.loads((WORK / "validation.json").read_text())
+        gaps = prev_report.get("viirs_gap_days", [])
+        cov = [(c["sat"], c["first"], c["last"], c["detections"]) for c in prev_report["coverage"]]
     else:
-        m = build_monthly(con)
+        gaps = find_viirs_gaps(con)
+        m = build_monthly(con, gaps)
         cov = con.execute(
             f"SELECT sat, min(date), max(date), sum(n) FROM read_parquet('{AGG}/*.parquet') GROUP BY 1 ORDER BY 1"
         ).fetchall()
@@ -238,9 +260,18 @@ def main():
     T = dense(st, st["t"].to_numpy(float))
     R_TA, R_T = fit_ratio(V, M, best_k), fit_ratio(V, T, best_k)
     report["final_fit_years"] = [int(stable[0]), int(stable[-1])]
+    # how much the exchange rate varies: percentiles of the applied ratio, weighted by pre-VIIRS MODIS detections
+    pre = m[(m["era"] == 1) & (m["year"] < 2012)]
+    rr = R_TA[pre["cell"].to_numpy(np.int64), pre["month"].to_numpy(np.int64) - 1]
+    ww = (pre["t"] + pre["a"]).to_numpy(float)
+    order = np.argsort(rr)
+    cw = np.cumsum(ww[order]) / ww.sum()
+    report["ratio_spread"] = {f"p{int(q * 100):02d}": round(float(rr[order][np.searchsorted(cw, q)]), 2) for q in (0.05, 0.5, 0.95)}
     report["global_ratio_final"] = round(float(V.sum() / M.sum()), 3)
     report["global_ratio_terra_final"] = round(float(V.sum() / T.sum()), 3)
     report["last_date"] = str(last_date)
+    report["viirs_gap_days"] = gaps
+    print("VIIRS outage days filled from MODIS:", len(gaps), gaps[:3], "...", flush=True)
     report["coverage"] = [{"sat": r[0], "first": str(r[1]), "last": str(r[2]), "detections": int(r[3])} for r in cov]
     np.savez_compressed(WORK / "ratios.npz", R_TA=R_TA, R_T=R_T)
     (WORK / "validation.json").write_text(json.dumps(report, indent=1))
