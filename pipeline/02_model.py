@@ -10,8 +10,9 @@ Model: a hierarchical, seasonally varying detection-ratio
 R is estimated from the overlap era (both sensors flying) as a ratio of sums, and each level of the
 hierarchy  global -> 5 deg block -> 1 deg cell -> 0.25 deg cell  is shrunk toward its parent with a
 gamma-Poisson prior worth K MODIS detections. Data-rich cells get their own local ratio; sparse cells borrow
-from their neighbourhood. Two ratios are kept: R_TA for the Terra+Aqua era and R_T for the Terra-only era
-(Nov 2000 - Jul 2002).
+from their neighbourhood. Three ratios are kept: R_TA for the Terra+Aqua era, R_T for the Terra-only era
+(Nov 2000 - Jul 2002), and R_J, which restates NOAA-20 VIIRS in S-NPP terms so the record can continue after
+S-NPP stopped delivering fire data (2 Nov 2026) and across S-NPP outages.
 
 Validation is a backcast, the same direction as the real task: fit on the later stable-orbit overlap years,
 reconstruct the earliest VIIRS years from MODIS alone, compare with what VIIRS actually saw.
@@ -36,29 +37,46 @@ AQUA_START = "2002-07-04"   # first Aqua MODIS fire detections in the archive
 VIIRS_START = "2012-01-20"  # first S-NPP VIIRS 375 m detections
 K_GRID = [10, 30, 100, 300]
 STABLE_UNTIL = 2021         # last year before Terra/Aqua orbit drift affects detections
+N20_START = "2018-04-01"    # NOAA-20 VIIRS science-quality record begins
 
 
-def find_viirs_gaps(con) -> list[str]:
-    """Days when S-NPP VIIRS returned (almost) nothing while MODIS kept seeing fire - sensor outages.
+def find_gaps(con) -> tuple[list[str], list[str], list[str]]:
+    """Classify the days when the reference sensor (S-NPP VIIRS) was not observing.
 
-    The global VIIRS/MODIS ratio sits near 4 every day; a day below 2 means VIIRS was not observing
-    (e.g. the S-NPP safe-mode outage of 27 Jul - 10 Aug 2022). Those days are treated like the pre-VIIRS
-    era: excluded from the fit and filled with MODIS x ratio.
+    The global VIIRS/MODIS detection ratio sits near 4 every single day, so a day below 2 means the VIIRS in
+    question returned little or nothing: a safe-mode outage (27 Jul - 10 Aug 2022), or the end of the mission
+    (S-NPP stopped delivering fire data on 2 Nov 2026). Such days are excluded from the fits and filled:
+      * from NOAA-20 VIIRS x its own ratio, when NOAA-20 was healthy that day (same instrument design,
+        50 minutes apart on the same orbit - by far the closer stand-in);
+      * otherwise from MODIS x ratio, exactly like the pre-VIIRS era.
+    Returns (days filled from MODIS, days filled from NOAA-20, days when NOAA-20 itself was out).
     """
     rows = con.execute(
         f"""
-        SELECT date FROM (
-          SELECT date, sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS v,
-                       sum(CASE WHEN sat <> 'N' THEN n ELSE 0 END) AS m
-          FROM read_parquet('{AGG}/*.parquet') WHERE date >= DATE '{VIIRS_START}' GROUP BY date)
-        WHERE v < 2.0 * m ORDER BY date
+        SELECT date, sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS v,
+                     sum(CASE WHEN sat = 'J' THEN n ELSE 0 END) AS j,
+                     sum(CASE WHEN sat IN ('T', 'A') THEN n ELSE 0 END) AS m
+        FROM read_parquet('{AGG}/*.parquet') WHERE date >= DATE '{VIIRS_START}' GROUP BY date ORDER BY date
         """
     ).fetchall()
-    return [str(r[0]) for r in rows]
+    modis_fill, n20_fill, n20_out = [], [], []
+    for date, v, j, m in rows:
+        n20_ok = str(date) >= N20_START and j >= 2.0 * m and j > 0
+        if str(date) >= N20_START and not n20_ok:
+            n20_out.append(str(date))
+        if v < 2.0 * m:
+            (n20_fill if n20_ok else modis_fill).append(str(date))
+    return modis_fill, n20_fill, n20_out
 
 
-def build_monthly(con, gaps: list[str]) -> pd.DataFrame:
-    gap_sql = ", ".join(f"DATE '{d}'" for d in gaps) or "DATE '1900-01-01'"
+def date_list(days: list[str]) -> str:
+    return ", ".join(f"DATE '{d}'" for d in days) or "DATE '1900-01-01'"
+
+
+def build_monthly(con, modis_fill: list[str], n20_fill: list[str], n20_out: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Monthly sums per cell, split by which sensor the harmonized value comes from (era):
+    0 Terra only, 1 MODIS (Terra + Aqua) x ratio, 2 S-NPP VIIRS as observed, 3 NOAA-20 VIIRS x ratio.
+    Also returns the S-NPP / NOAA-20 overlap (days both were healthy) used to learn the NOAA-20 ratio."""
     con.execute(
         f"""
         CREATE OR REPLACE TABLE monthly AS
@@ -66,16 +84,31 @@ def build_monthly(con, gaps: list[str]) -> pd.DataFrame:
                CAST(year(date) AS SMALLINT) AS year,
                CAST(month(date) AS TINYINT) AS month,
                CAST(CASE WHEN date < DATE '{AQUA_START}' THEN 0
-                         WHEN date < DATE '{VIIRS_START}' OR date IN ({gap_sql}) THEN 1 ELSE 2 END AS TINYINT) AS era,
+                         WHEN date < DATE '{VIIRS_START}' OR date IN ({date_list(modis_fill)}) THEN 1
+                         WHEN date IN ({date_list(n20_fill)}) THEN 3 ELSE 2 END AS TINYINT) AS era,
                CAST(sum(CASE WHEN sat = 'T' THEN n ELSE 0 END) AS INTEGER) AS t,
                CAST(sum(CASE WHEN sat = 'A' THEN n ELSE 0 END) AS INTEGER) AS a,
-               CAST(sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS INTEGER) AS v
+               CAST(sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS INTEGER) AS v,
+               CAST(sum(CASE WHEN sat = 'J' THEN n ELSE 0 END) AS INTEGER) AS j
         FROM read_parquet('{AGG}/*.parquet')
         GROUP BY ALL
         """
     )
     con.execute(f"COPY monthly TO '{WORK}/monthly.parquet' (FORMAT parquet, COMPRESSION zstd)")
-    return con.execute("SELECT * FROM monthly").df()
+    con.execute(
+        f"""
+        COPY (
+          SELECT cell, CAST(year(date) AS SMALLINT) AS year, CAST(month(date) AS TINYINT) AS month,
+                 CAST(sum(CASE WHEN sat = 'N' THEN n ELSE 0 END) AS INTEGER) AS v,
+                 CAST(sum(CASE WHEN sat = 'J' THEN n ELSE 0 END) AS INTEGER) AS j
+          FROM read_parquet('{AGG}/*.parquet')
+          WHERE date >= DATE '{N20_START}' AND sat IN ('N', 'J')
+            AND date NOT IN ({date_list(modis_fill + n20_fill + n20_out)})
+          GROUP BY ALL
+        ) TO '{WORK}/overlap_j.parquet' (FORMAT parquet, COMPRESSION zstd)
+        """
+    )
+    return con.execute("SELECT * FROM monthly").df(), con.execute(f"SELECT * FROM '{WORK}/overlap_j.parquet'").df()
 
 
 def dense(df: pd.DataFrame, col) -> np.ndarray:
@@ -150,11 +183,12 @@ def main():
     if "--from-monthly" in sys.argv:   # quick local iteration without the gridded daily files
         m = con.execute(f"SELECT * FROM '{WORK}/monthly.parquet'").df()
         prev_report = json.loads((WORK / "validation.json").read_text())
-        gaps = prev_report.get("viirs_gap_days", [])
+        gaps, n20_days = prev_report.get("viirs_gap_days", []), prev_report.get("noaa20_days", [])
+        ovj = con.execute(f"SELECT * FROM '{WORK}/overlap_j.parquet'").df()
         cov = [(c["sat"], c["first"], c["last"], c["detections"]) for c in prev_report["coverage"]]
     else:
-        gaps = find_viirs_gaps(con)
-        m = build_monthly(con, gaps)
+        gaps, n20_days, n20_out = find_gaps(con)
+        m, ovj = build_monthly(con, gaps, n20_days, n20_out)
         cov = con.execute(
             f"SELECT sat, min(date), max(date), sum(n) FROM read_parquet('{AGG}/*.parquet') GROUP BY 1 ORDER BY 1"
         ).fetchall()
@@ -271,9 +305,33 @@ def main():
     report["global_ratio_terra_final"] = round(float(V.sum() / T.sum()), 3)
     report["last_date"] = str(last_date)
     report["viirs_gap_days"] = gaps
-    print("VIIRS outage days filled from MODIS:", len(gaps), gaps[:3], "...", flush=True)
+    report["noaa20_days"] = n20_days
+    print("S-NPP outage days filled from MODIS:", len(gaps), "| from NOAA-20:", len(n20_days), flush=True)
+
+    # --- the continuity sensor: NOAA-20 VIIRS restated in S-NPP terms, learned where both were observing.
+    # Here the real task runs forward in time (after S-NPP ends), so the hold-out is the latest years.
+    R_J = np.ones((NCELL, 12), dtype=np.float32)
+    snpp_last = max((str(r[2]) for r in cov if r[0] == "N"), default=None)
+    report["snpp_last_date"] = snpp_last
+    if len(ovj):
+        ovj = ovj[ovj["year"] <= 2025]
+        jy = sorted(ovj["year"].unique())
+        j_hold, j_train = jy[-3:], jy[:-3]
+        tr, hj = ovj[ovj["year"].isin(j_train)], ovj[ovj["year"].isin(j_hold)].reset_index(drop=True)
+        Rj = fit_ratio(dense(tr, tr["v"].to_numpy(float)), dense(tr, tr["j"].to_numpy(float)), best_k)
+        hc, hm, hJ = hj["cell"].to_numpy(np.int64), hj["month"].to_numpy(np.int64) - 1, hj["j"].to_numpy(float)
+        gj = float(tr["v"].sum() / tr["j"].sum())
+        report["noaa20"] = {
+            "train_years": [int(y) for y in j_train], "holdout_years": [int(y) for y in j_hold],
+            "global_ratio": round(float(ovj["v"].sum() / ovj["j"].sum()), 3),
+            "methods": {"raw_noaa20": evaluate(hj, hJ), "global_factor": evaluate(hj, gj * hJ),
+                        "hierarchical": evaluate(hj, Rj[hc, hm] * hJ)},
+        }
+        for name, res in report["noaa20"]["methods"].items():
+            print("NOAA-20", name, res["1deg_month"], res["5deg_year"], flush=True)
+        R_J = fit_ratio(dense(ovj, ovj["v"].to_numpy(float)), dense(ovj, ovj["j"].to_numpy(float)), best_k)
     report["coverage"] = [{"sat": r[0], "first": str(r[1]), "last": str(r[2]), "detections": int(r[3])} for r in cov]
-    np.savez_compressed(WORK / "ratios.npz", R_TA=R_TA, R_T=R_T)
+    np.savez_compressed(WORK / "ratios.npz", R_TA=R_TA, R_T=R_T, R_J=R_J)
     (WORK / "validation.json").write_text(json.dumps(report, indent=1))
     print("saved ratios + validation; last date", last_date)
 

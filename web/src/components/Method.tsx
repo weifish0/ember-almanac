@@ -29,8 +29,15 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
             <div><b>Borrow strength, don’t guess.</b> Cells with few fires lean on their 1° neighbourhood, then their 5° block, then the global rate — a gamma-Poisson shrinkage, so sparse places get a stable ratio and busy places keep their own.</div>
           </li>
           <li>
-            <div><b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows VIIRS as observed{meta.viirsGapDays?.length ? `, except ${meta.viirsGapDays.length} days when VIIRS was not observing (the longest run: 27 July–10 August 2022), which MODIS fills the same way` : ''}. Raw counts stay one hover away.</div>
+            <div><b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows Suomi NPP VIIRS as observed{meta.viirsGapDays?.length ? `, except ${meta.viirsGapDays.length} outage days that MODIS fills the same way` : ''}. Raw counts stay one hover away.</div>
           </li>
+          {v.noaa20 && meta.noaa20Days?.length ? (
+            <li>
+              <div>
+                <b>Carry on when the reference stops.</b> Suomi NPP delivered its last fire data on {v.snpp_last_date}. From then on, and on {meta.noaa20Days.filter((d) => d <= (meta.snppLastDay ?? 0)).length} earlier outage days, the record continues on NOAA-20 VIIRS — the same instrument design — restated through its own local ratio ({v.noaa20.global_ratio.toFixed(2)}× worldwide). On held-out years ({v.noaa20.holdout_years[0]}–{v.noaa20.holdout_years[v.noaa20.holdout_years.length - 1]}) that hand-over has a typical error of {v.noaa20.methods.hierarchical['1deg_month'].mdape.toFixed(0)}% per 1° cell and month, and {v.noaa20.methods.hierarchical['5deg_year'].mdape.toFixed(0)}% per region and year.
+              </div>
+            </li>
+          ) : null}
         </ol>
         <div className="proof">
           <p className="proof-lede">

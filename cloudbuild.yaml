@@ -1,5 +1,9 @@
 # Runs the whole data pipeline on Google Cloud Build (fast network to NASA, 32 cores) and publishes the
 # browser-ready files to a public bucket. Gridded intermediates are cached in the bucket between runs.
+#
+#   gcloud builds submit --config cloudbuild.yaml --substitutions=_MAP_KEY=<your FIRMS MAP_KEY> .
+#
+# Without _MAP_KEY the record stops at the last yearly archive; with it, the current year is added from the API.
 steps:
   - id: restore-cache
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -7,22 +11,38 @@ steps:
     args:
       - -c
       - |
-        mkdir -p data/work/agg
-        gcloud storage rsync -r gs://${_BUCKET}/cache/agg data/work/agg || true
-        ls data/work/agg | wc -l
-  - id: pipeline
+        mkdir -p data/work/agg data/work/static data/work/nrt
+        for d in agg static nrt; do gcloud storage rsync -r gs://${_BUCKET}/cache/$d data/work/$d || true; done
+        ls data/work/agg | wc -l; ls data/work/nrt | wc -l
+  - id: ingest
+    name: python:3.12
+    entrypoint: bash
+    env: ['FIRMS_MAP_KEY=${_MAP_KEY}']
+    args:
+      - -c
+      - |
+        set -e
+        pip install -q duckdb numpy pandas pyarrow
+        python -u pipeline/00_fetch_recent.py &
+        python -u pipeline/01_aggregate.py
+        wait
+        python -u pipeline/01_aggregate.py --recent
+  - id: save-cache
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        for d in agg static nrt; do gcloud storage rsync -r data/work/$d gs://${_BUCKET}/cache/$d; done
+  - id: model
     name: python:3.12
     entrypoint: bash
     args:
       - -c
       - |
         set -e
+        if [ "${_ONLY_INGEST}" = "1" ]; then exit 0; fi
         pip install -q duckdb numpy pandas pyarrow
-        have=$(ls data/work/agg/*.parquet 2>/dev/null | wc -l)
-        if [ "$have" -lt 40 ] || [ "${_REFRESH}" = "1" ]; then
-          PARALLEL=10 bash pipeline/download.sh
-          python -u pipeline/01_aggregate.py
-        fi
         python -u pipeline/02_model.py
         python -u pipeline/03_tiles.py
   - id: publish
@@ -32,15 +52,16 @@ steps:
       - -c
       - |
         set -e
-        gcloud storage rsync -r data/work/agg gs://${_BUCKET}/cache/agg
+        if [ "${_ONLY_INGEST}" = "1" ]; then exit 0; fi
         gcloud storage cp data/work/validation.json data/work/ratios.npz data/work/monthly.parquet gs://${_BUCKET}/cache/
         gcloud storage rsync -r --delete-unmatched-destination-objects --cache-control="public, max-age=600" web/public/data gs://${_BUCKET}/${_VERSION}
 substitutions:
   _BUCKET: ember-almanac-ffe3bb
   _VERSION: v1
-  _REFRESH: "0"
+  _MAP_KEY: ""
+  _ONLY_INGEST: "0"
 options:
   machineType: E2_HIGHCPU_32
   diskSizeGb: 200
   logging: CLOUD_LOGGING_ONLY
-timeout: 7200s
+timeout: 10800s

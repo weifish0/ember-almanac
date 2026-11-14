@@ -128,10 +128,11 @@ export default function App() {
 
   const exportCsv = () => {
     if (!meta || !series || !area) return
-    const rows = ['date,terra_modis,aqua_modis,snpp_viirs,harmonized_viirs_equivalent,is_estimate']
+    const rows = ['date,terra_modis,aqua_modis,snpp_viirs,noaa20_viirs_when_used,harmonized_viirs_equivalent,source']
+    const SRC = ['snpp_observed', 'modis_x_ratio', 'noaa20_x_ratio']
     for (let d = meta.firstDay; d <= meta.lastDay; d++) {
       const iso = dayToDate(d).toISOString().slice(0, 10)
-      rows.push(`${iso},${series.terra[d]},${series.aqua[d]},${series.viirs[d]},${series.harm[d].toFixed(2)},${series.est[d]}`)
+      rows.push(`${iso},${series.terra[d]},${series.aqua[d]},${series.viirs[d]},${series.noaa20[d]},${series.harm[d].toFixed(2)},${SRC[series.est[d]]}`)
     }
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }))
@@ -286,6 +287,23 @@ export default function App() {
   )
 }
 
+/** One sentence on the last two weeks: the early-warning read. */
+function nowLine(a: Almanac): { text: string; hot: boolean } | null {
+  const r = a.recent
+  if (!r || a.sparse) return null
+  const span = `${shortDate(r.fromDay)}–${shortDate(r.toDay)}`
+  const peakDaily = Math.max(...a.clim.mean)
+  const quiet = r.normal / 14 < 0.05 * peakDaily // normally the off-season
+  if (quiet && r.total / 14 < 0.1 * peakDaily)
+    return { text: `Right now (${span}): quiet, as usual for this time of year.`, hot: false }
+  if (quiet)
+    return { text: `Right now (${span}): ${fmt(r.total)} detections in what is normally the quiet season (typically ${fmt(r.normal)}).`, hot: true }
+  const x = r.ratio
+  const how = x >= 2 ? 'far above' : x >= 1.3 ? 'above' : x > 0.77 ? 'close to' : x > 0.5 ? 'below' : 'far below'
+  const rank = r.percentile >= 90 ? ` — ${r.rank === 1 ? 'the most' : `rank ${r.rank}`} of ${r.of} years for these two weeks` : ''
+  return { text: `Right now (${span}): ${x >= 10 ? Math.round(x) : x.toFixed(1)}× normal, ${how} what these two weeks usually bring${rank}.`, hot: x >= 1.3 }
+}
+
 function lead(a: Almanac): string[] {
   const out: string[] = []
   if (a.sparse || !a.season) {
@@ -332,6 +350,7 @@ function Report(p: {
   const rank = selected ? ranked.findIndex((x) => x.year === selected.year) + 1 : 0
   const l = a.latest
   const lastDate = dayToDate(meta.lastDay)
+  const now = nowLine(a)
   return (
     <article className="report">
       <div className="report-head">
@@ -343,6 +362,9 @@ function Report(p: {
       </div>
 
       {lead(a).map((t, i) => <p key={i} className="lede">{t}</p>)}
+      {now && lastDate.getTime() > Date.now() - 45 * 86400000 && (
+        <p className={`now ${now.hot ? 'hot' : ''}`}>{now.text}</p>
+      )}
 
       {!a.sparse && (
         <dl className="facts">

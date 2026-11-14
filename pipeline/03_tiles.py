@@ -8,10 +8,12 @@ Outputs (web/public/data):
   meta.json               grid definition, sensor eras, VIIRS outage days, tile index, validation report
 
 Tile layout (little endian, before gzip):
-  u32 magic 'EMB1' | u16 nCells | u16 0
-  nCells x { u16 cellInTile (row*40+col, row 0 = south) | u16 0 | u32 nRecords | u16[12] R_TA*100 | u16[12] R_T*100 }
-  u32 lenDay | u32 lenTerra | u32 lenAqua | u32 lenViirs
-  four LEB128 varint streams: day (delta within a cell, first value absolute days since 2000-01-01), terra, aqua, viirs
+  u32 magic 'EMB2' | u16 nCells | u16 0
+  nCells x { u16 cellInTile (row*40+col, row 0 = south) | u16 0 | u32 nRecords
+             | u16[12] R_TA*100 | u16[12] R_T*100 | u16[12] R_J*100 }
+  u32 lenDay | u32 lenTerra | u32 lenAqua | u32 lenSnpp | u32 lenNoaa20
+  five LEB128 varint streams: day (delta within a cell, first value absolute days since 2000-01-01),
+  terra, aqua, snpp, noaa20. NOAA-20 counts are stored only for the days it stands in for S-NPP.
 """
 import calendar
 import datetime as dt
@@ -52,22 +54,28 @@ def main():
     (OUT / "tiles").mkdir(parents=True)
     report = json.loads((WORK / "validation.json").read_text())
     ratios = np.load(WORK / "ratios.npz")
-    R_TA, R_T = ratios["R_TA"], ratios["R_T"]
+    R_TA, R_T, R_J = ratios["R_TA"], ratios["R_T"], ratios["R_J"]
     last_date = dt.date.fromisoformat(report["last_date"])
+    n20_days = [(dt.date.fromisoformat(d) - EPOCH).days for d in report.get("noaa20_days", [])]
+    n20_sql = ", ".join(str(d) for d in n20_days) or "-1"
 
     con = duckdb.connect()
     con.execute("SET threads TO 24")
     con.execute("SET memory_limit = '20GB'")
-    cell, day, t, a, v = con.execute(
+    cell, day, t, a, v, j = con.execute(
         f"""
-        SELECT cell,
-               CAST(date_diff('day', DATE '{EPOCH}', date) AS USMALLINT) AS day,
-               CAST(LEAST(65535, sum(CASE WHEN sat = 'T' THEN n ELSE 0 END)) AS USMALLINT) AS t,
-               CAST(LEAST(65535, sum(CASE WHEN sat = 'A' THEN n ELSE 0 END)) AS USMALLINT) AS a,
-               CAST(LEAST(65535, sum(CASE WHEN sat = 'N' THEN n ELSE 0 END)) AS USMALLINT) AS v
-        FROM read_parquet('{AGG}/*.parquet')
-        GROUP BY cell, date
-        ORDER BY (cell // {NX} // {TILE}) * 36 + (cell % {NX}) // {TILE}, cell, date
+        SELECT * FROM (
+          SELECT cell,
+                 CAST(date_diff('day', DATE '{EPOCH}', date) AS USMALLINT) AS day,
+                 CAST(LEAST(65535, sum(CASE WHEN sat = 'T' THEN n ELSE 0 END)) AS USMALLINT) AS t,
+                 CAST(LEAST(65535, sum(CASE WHEN sat = 'A' THEN n ELSE 0 END)) AS USMALLINT) AS a,
+                 CAST(LEAST(65535, sum(CASE WHEN sat = 'N' THEN n ELSE 0 END)) AS USMALLINT) AS v,
+                 CAST(LEAST(65535, sum(CASE WHEN sat = 'J' AND date_diff('day', DATE '{EPOCH}', date) IN ({n20_sql})
+                                            THEN n ELSE 0 END)) AS USMALLINT) AS j
+          FROM read_parquet('{AGG}/*.parquet')
+          GROUP BY cell, date)
+        WHERE t + a + v + j > 0
+        ORDER BY (cell // {NX} // {TILE}) * 36 + (cell % {NX}) // {TILE}, cell, day
         """
     ).fetchnumpy().values()
     print(f"cell-day records: {len(cell):,}")
@@ -88,14 +96,15 @@ def main():
         d = day[s:e].astype(np.int64)
         delta = np.diff(d, prepend=0)
         delta[c_starts] = d[c_starts]                      # first record of each cell is absolute
-        head = bytearray(struct.pack("<IHH", 0x31424D45, len(ucell), 0))
+        head = bytearray(struct.pack("<IHH", 0x32424D45, len(ucell), 0))
         cit = ((ucell // NX) % TILE) * TILE + (ucell % NX) % TILE
         rta = np.clip(np.round(R_TA[ucell] * 100), 1, 65535).astype("<u2")
         rt = np.clip(np.round(R_T[ucell] * 100), 1, 65535).astype("<u2")
+        rj = np.clip(np.round(R_J[ucell] * 100), 1, 65535).astype("<u2")
         for i in range(len(ucell)):
-            head += struct.pack("<HHI", int(cit[i]), 0, int(c_counts[i])) + rta[i].tobytes() + rt[i].tobytes()
-        streams = [varint(delta), varint(t[s:e]), varint(a[s:e]), varint(v[s:e])]
-        head += struct.pack("<4I", *(len(x) for x in streams))
+            head += struct.pack("<HHI", int(cit[i]), 0, int(c_counts[i])) + rta[i].tobytes() + rt[i].tobytes() + rj[i].tobytes()
+        streams = [varint(delta), varint(t[s:e]), varint(a[s:e]), varint(v[s:e]), varint(j[s:e])]
+        head += struct.pack("<5I", *(len(x) for x in streams))
         blob = gzip.compress(bytes(head) + b"".join(streams), compresslevel=9, mtime=0)
         (OUT / "tiles" / f"{tx}_{ty}.bin.gz").write_bytes(blob)
         index[f"{tx}_{ty}"] = [len(blob), int(e - s)]
@@ -106,13 +115,14 @@ def main():
     first_year = 2001
     last_year = last_date.year if (last_date.month, last_date.day) == (12, 31) else last_date.year - 1
     m = con.execute(
-        f"SELECT cell, month, era, sum(t) t, sum(a) a, sum(v) v FROM '{WORK}/monthly.parquet' "
+        f"SELECT cell, month, era, sum(t) t, sum(a) a, sum(v) v, sum(j) j FROM '{WORK}/monthly.parquet' "
         f"WHERE year BETWEEN {first_year} AND {last_year} GROUP BY ALL"
     ).df()
     mi = m["month"].to_numpy(np.int64) - 1
     cc = m["cell"].to_numpy(np.int64)
     era = m["era"].to_numpy()
-    h = np.where(era == 2, m["v"], np.where(era == 1, R_TA[cc, mi] * (m["t"] + m["a"]), R_T[cc, mi] * m["t"]))
+    h = np.where(era == 2, m["v"], np.where(era == 3, R_J[cc, mi] * m["j"],
+                 np.where(era == 1, R_TA[cc, mi] * (m["t"] + m["a"]), R_T[cc, mi] * m["t"])))
     clim = np.zeros(NX * NY * 12)
     np.add.at(clim, cc * 12 + mi, h)
     clim = clim.reshape(-1, 12)
@@ -135,6 +145,8 @@ def main():
         "firstDay": (dt.date.fromisoformat(min(c["first"] for c in report["coverage"])) - EPOCH).days,
         "climYears": [first_year, last_year],
         "viirsGapDays": [(dt.date.fromisoformat(d) - EPOCH).days for d in report.get("viirs_gap_days", [])],
+        "noaa20Days": n20_days,
+        "snppLastDay": (dt.date.fromisoformat(report["snpp_last_date"]) - EPOCH).days if report.get("snpp_last_date") else None,
         "tiles": index,
         "validation": report,
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),

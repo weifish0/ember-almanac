@@ -47,6 +47,8 @@ export type Almanac = {
   trend: { slopePct: number; p: number; tau: number } | null
   episodes: Episode[]
   latest: { year: number; throughDoy: number; cumulative: number; normal: number; percentile: number; ratio: number } | null
+  /** the most recent fortnight against the same fortnight in every complete year */
+  recent: { fromDay: number; toDay: number; total: number; normal: number; percentile: number; ratio: number; rank: number; of: number } | null
   scaleMax: number
   sparse: boolean
 }
@@ -184,7 +186,7 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
     const d1 = Math.min(meta.lastDay, dateToDay(y, 11, 31))
     for (let d = d0; d <= d1; d++) {
       total += s.harm[d]
-      if (s.est[d]) estimated += s.harm[d]
+      if (s.est[d] === 1) estimated += s.harm[d] // MODIS-based days carry the interval; NOAA-20 is the same instrument
       rawModis += s.terra[d] + s.aqua[d]
       rawViirs += s.viirs[d]
     }
@@ -346,13 +348,37 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
       }
   }
 
+  // the last two weeks (leaving out the final two days, which near-real-time data has not finished filling)
+  let recent: Almanac['recent'] = null
+  {
+    const to = meta.lastDay - 2
+    const from = to - 13
+    if (from > meta.firstDay && fullYears.length >= 10) {
+      let total = 0
+      for (let d = from; d <= to; d++) total += s.harm[d]
+      const ref = fullYears
+        .map((yy) => {
+          let c = 0
+          for (let d = from; d <= to; d++) {
+            const v = daily[yy - 2000][tab.doy[d]]
+            if (!Number.isNaN(v)) c += v
+          }
+          return c
+        })
+        .sort((a, b) => a - b)
+      const normal = quantileSorted(ref, 0.5)
+      const below = ref.filter((v) => v < total).length
+      recent = { fromDay: from, toDay: to, total, normal, percentile: (below / ref.length) * 100, ratio: normal > 0 ? total / normal : NaN, rank: ref.length - below + 1, of: ref.length + 1 }
+    }
+  }
+
   // colour scale: 99.5th percentile of non-zero daily values
   const nz: number[] = []
   for (let d = meta.firstDay; d <= meta.lastDay; d++) if (s.harm[d] > 0) nz.push(s.harm[d])
   nz.sort((a, b) => a - b)
   const scaleMax = Math.max(1, quantileSorted(nz, 0.995))
 
-  return { years, fullYears, daily, smooth, clim, monthShare, season, periods, annual, meanAnnual, trend, episodes, latest, scaleMax, sparse }
+  return { years, fullYears, daily, smooth, clim, monthShare, season, periods, annual, meanAnnual, trend, episodes, latest, recent, scaleMax, sparse }
 }
 
 export function fmt(n: number): string {

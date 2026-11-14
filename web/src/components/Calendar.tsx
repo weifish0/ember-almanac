@@ -142,8 +142,8 @@ export function Calendar({ meta, series, almanac, smooth, year, onYear }: Props)
   if (tip) {
     const d = dateToDay(tip.year, 0, 1) + tip.doy + (isLeap(tip.year) && tip.doy >= 59 ? 1 : 0)
     const inRange = d >= meta.firstDay && d <= meta.lastDay
-    const est = inRange ? series.est[d] === 1 : false
-    const outage = est && d >= meta.viirsStartDay
+    const src = inRange ? series.est[d] : 0
+    const snppDown = src !== 0 && d >= meta.viirsStartDay
     tipBody = (
       <div className="tip" style={{ left: Math.min(width - 190, Math.max(0, tip.x - 90)), top: tip.y + 18 }}>
         <strong>
@@ -152,10 +152,12 @@ export function Calendar({ meta, series, almanac, smooth, year, onYear }: Props)
         {inRange ? (
           <>
             <span className="tip-big">
-              {fmt(series.harm[d])} <small>{est ? 'VIIRS-equivalent (estimated)' : 'VIIRS detections'}</small>
+              {fmt(series.harm[d])}{' '}
+              <small>{src === 1 ? 'VIIRS-equivalent (from MODIS)' : src === 2 ? 'VIIRS-equivalent (from NOAA-20)' : 'VIIRS detections'}</small>
             </span>
             <span className="tip-raw">
-              raw · Terra {series.terra[d]} · Aqua {d >= meta.aquaStartDay ? series.aqua[d] : '—'} · VIIRS {outage ? 'outage' : est ? '—' : series.viirs[d]}
+              raw · Terra {series.terra[d]} · Aqua {d >= meta.aquaStartDay ? series.aqua[d] : '—'} · S-NPP {snppDown ? 'not observing' : src ? '—' : series.viirs[d]}
+              {src === 2 ? ` · NOAA-20 ${series.noaa20[d]}` : ''}
             </span>
           </>
         ) : (

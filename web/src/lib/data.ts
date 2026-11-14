@@ -17,6 +17,8 @@ export type Validation = {
   raw_totals_by_year: Record<string, { terra: number; aqua: number; viirs: number }>
   coverage: { sat: string; first: string; last: string; detections: number }[]
   last_date: string
+  snpp_last_date?: string | null
+  noaa20?: { train_years: number[]; holdout_years: number[]; global_ratio: number; methods: Record<string, Record<string, Score>> }
   final_fit_years?: [number, number]
   ratio_spread?: { p05: number; p50: number; p95: number }
 }
@@ -34,6 +36,9 @@ export type Meta = {
   climYears: [number, number]
   /** days when VIIRS was not observing (sensor outage); filled from MODIS like the pre-VIIRS era */
   viirsGapDays?: number[]
+  /** days when NOAA-20 VIIRS stands in for S-NPP (S-NPP outages, and everything after S-NPP stopped) */
+  noaa20Days?: number[]
+  snppLastDay?: number | null
   tiles: Record<string, [number, number]>
   validation: Validation
   generated: string
@@ -97,10 +102,12 @@ export type Tile = {
   start: Uint32Array // record offset of each cell (length nCells + 1)
   rta: Uint16Array // nCells * 12, VIIRS per (Terra+Aqua) detection, x100
   rt: Uint16Array // nCells * 12, VIIRS per Terra detection, x100
+  rj: Uint16Array // nCells * 12, S-NPP VIIRS per NOAA-20 VIIRS detection, x100
   day: Uint16Array
   t: Uint16Array
   a: Uint16Array
   v: Uint16Array
+  j: Uint16Array // NOAA-20, only on the days it stands in for S-NPP
 }
 
 function readVarints(bytes: Uint8Array, out: Uint16Array) {
@@ -120,12 +127,15 @@ function readVarints(bytes: Uint8Array, out: Uint16Array) {
 
 function decodeTile(buf: ArrayBuffer, tx: number, ty: number): Tile {
   const dv = new DataView(buf)
-  if (dv.getUint32(0, true) !== 0x31424d45) throw new Error('bad tile')
+  const magic = dv.getUint32(0, true)
+  const v2 = magic === 0x32424d45 // 'EMB2' adds the NOAA-20 ratios and stream
+  if (!v2 && magic !== 0x31424d45) throw new Error('bad tile')
   const nCells = dv.getUint16(4, true)
   const cit = new Uint16Array(nCells)
   const start = new Uint32Array(nCells + 1)
   const rta = new Uint16Array(nCells * 12)
   const rt = new Uint16Array(nCells * 12)
+  const rj = new Uint16Array(nCells * 12).fill(100)
   let p = 8
   let total = 0
   for (let i = 0; i < nCells; i++) {
@@ -135,21 +145,23 @@ function decodeTile(buf: ArrayBuffer, tx: number, ty: number): Tile {
     for (let m = 0; m < 12; m++) {
       rta[i * 12 + m] = dv.getUint16(p + 8 + m * 2, true)
       rt[i * 12 + m] = dv.getUint16(p + 32 + m * 2, true)
+      if (v2) rj[i * 12 + m] = dv.getUint16(p + 56 + m * 2, true)
     }
-    p += 56
+    p += v2 ? 80 : 56
   }
   start[nCells] = total
-  const lens = [0, 1, 2, 3].map((k) => dv.getUint32(p + k * 4, true))
-  p += 16
-  const cols = [0, 1, 2, 3].map(() => new Uint16Array(total))
-  for (let k = 0; k < 4; k++) {
+  const nStreams = v2 ? 5 : 4
+  const lens = Array.from({ length: nStreams }, (_, k) => dv.getUint32(p + k * 4, true))
+  p += nStreams * 4
+  const cols = Array.from({ length: 5 }, () => new Uint16Array(total))
+  for (let k = 0; k < nStreams; k++) {
     readVarints(new Uint8Array(buf, p, lens[k]), cols[k])
     p += lens[k]
   }
   // days are delta-coded inside each cell
   const day = cols[0]
   for (let i = 0; i < nCells; i++) for (let j = start[i] + 1; j < start[i + 1]; j++) day[j] += day[j - 1]
-  return { tx, ty, nCells, cit, start, rta, rt, day, t: cols[1], a: cols[2], v: cols[3] }
+  return { tx, ty, nCells, cit, start, rta, rt, rj, day, t: cols[1], a: cols[2], v: cols[3], j: cols[4] }
 }
 
 const tileCache = new Map<string, Promise<Tile | null>>()
@@ -196,7 +208,8 @@ export type Series = {
   viirs: Float32Array
   /** harmonized, VIIRS-equivalent detections per day */
   harm: Float32Array
-  /** 1 where the harmonized value is a MODIS-based estimate (pre-VIIRS era, or a VIIRS outage day) */
+  noaa20: Float32Array
+  /** where each day's harmonized value comes from: 0 S-NPP VIIRS as observed, 1 MODIS x ratio, 2 NOAA-20 VIIRS x ratio */
   est: Uint8Array
   cellsWithFire: number
   cellsTotal: number
@@ -215,6 +228,8 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
   const est = new Uint8Array(nDays)
   est.fill(1, 0, Math.min(nDays, meta.viirsStartDay))
   for (const d of meta.viirsGapDays ?? []) if (d < nDays) est[d] = 1
+  for (const d of meta.noaa20Days ?? []) if (d < nDays) est[d] = 2
+  const noaa20 = new Float32Array(nDays)
   const res = meta.res
   const tc = meta.tileCells
   const x0 = Math.round((bbox[0] + 180) / res)
@@ -240,17 +255,20 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
         if (gx < x0 || gx >= x1 || gy < y0 || gy >= y1) continue
         cellsWithFire++
         const r0 = i * 12
-        for (let j = tile.start[i]; j < tile.start[i + 1]; j++) {
-          const d = tile.day[j]
+        for (let k: number = tile.start[i]; k < tile.start[i + 1]; k++) {
+          const d = tile.day[k]
           if (d >= nDays) continue
-          const t = tile.t[j]
-          const a = tile.a[j]
-          const v = tile.v[j]
+          const t = tile.t[k]
+          const a = tile.a[k]
+          const v = tile.v[k]
           terra[d] += t
           aqua[d] += a
           viirs[d] += v
-          if (!est[d]) harm[d] += v
-          else if (d >= meta.aquaStartDay) {
+          if (est[d] === 0) harm[d] += v
+          else if (est[d] === 2) {
+            noaa20[d] += tile.j[k]
+            harm[d] += (tile.rj[r0 + month[d]] / 100) * tile.j[k]
+          } else if (d >= meta.aquaStartDay) {
             const h = (tile.rta[r0 + month[d]] / 100) * (t + a)
             harm[d] += h
             ratioNum += h
@@ -267,6 +285,7 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
     terra,
     aqua,
     viirs,
+    noaa20,
     harm,
     est,
     cellsWithFire,
