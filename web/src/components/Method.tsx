@@ -20,16 +20,16 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
       <div className="method-cols">
         <ol className="steps">
           <li>
-            <b>Same rules for both sensors.</b> Every NASA FIRMS detection from MODIS (Terra and Aqua, 1 km, since 2000) and VIIRS (Suomi NPP, 375 m, since 2012) is screened the same way — vegetation fires only, low-confidence detections dropped — and counted on one 0.25° daily grid.
+            <div><b>Same rules for both sensors.</b> Every NASA FIRMS detection from MODIS (Terra and Aqua, 1 km, since 2000) and VIIRS (Suomi NPP, 375 m, since 2012) is screened the same way — vegetation fires only, low-confidence detections dropped — and counted on one 0.25° daily grid.</div>
           </li>
           <li>
-            <b>Learn the exchange rate where they overlap.</b> VIIRS sees {v.global_ratio_final.toFixed(1)}× more fire pixels than MODIS worldwide, but the rate depends on what burns: field stubble and forest crown fire differ several-fold. So the ratio is learned per grid cell and per month from the years both flew.
+            <div><b>Learn the exchange rate where they overlap.</b> VIIRS sees {v.global_ratio_final.toFixed(1)}× more fire pixels than MODIS worldwide, but the rate depends on what burns: field stubble and forest crown fire differ several-fold. So the ratio is learned per grid cell and per month from the years both flew.</div>
           </li>
           <li>
-            <b>Borrow strength, don’t guess.</b> Cells with few fires lean on their 1° neighbourhood, then their 5° block, then the global rate — a gamma-Poisson shrinkage, so sparse places get a stable ratio and busy places keep their own.
+            <div><b>Borrow strength, don’t guess.</b> Cells with few fires lean on their 1° neighbourhood, then their 5° block, then the global rate — a gamma-Poisson shrinkage, so sparse places get a stable ratio and busy places keep their own.</div>
           </li>
           <li>
-            <b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows VIIRS as observed. Raw counts stay one hover away.
+            <div><b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows VIIRS as observed. Raw counts stay one hover away.</div>
           </li>
         </ol>
         <div className="proof">

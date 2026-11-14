@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import maplibregl, { type CanvasSource, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import maplibregl, { type CanvasSource, type ExpressionSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { FeatureCollection } from 'geojson'
 import { decodeClim, snapBBox, type BBox, type Clim, type Meta } from '../lib/data'
@@ -12,8 +12,11 @@ const CW = 2880 // two pixels per 0.25 degree cell
 const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))
 const CH = Math.round((CW * (mercY(LAT_N) - mercY(LAT_S))) / (2 * Math.PI))
 
+const NAME: ExpressionSpecification = ['coalesce', ['get', 'name:en'], ['get', 'name:latin'], ['get', 'name']]
+
 const style: StyleSpecification = {
   version: 8,
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
   projection: { type: 'globe' },
   sources: {
     base: {
@@ -21,19 +24,13 @@ const style: StyleSpecification = {
       tiles: [`${GIBS}/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`],
       tileSize: 256,
       maxzoom: 8,
-      attribution: 'Imagery &amp; reference layers: NASA GIBS · Fire data: NASA FIRMS (MODIS C6.1, VIIRS S-NPP 375 m)',
+      attribution: 'Fire data: NASA FIRMS (MODIS C6.1, VIIRS S-NPP 375 m) · Imagery: NASA GIBS Blue Marble',
     },
-    lines: {
-      type: 'raster',
-      tiles: [`${GIBS}/Reference_Features_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png`],
-      tileSize: 256,
-      maxzoom: 13,
-    },
-    labels: {
-      type: 'raster',
-      tiles: [`${GIBS}/Reference_Labels_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png`],
-      tileSize: 256,
-      maxzoom: 13,
+    lines: { type: 'geojson', data: '/lines.json' },
+    places: {
+      type: 'vector',
+      url: 'https://tiles.openfreemap.org/planet',
+      attribution: 'Labels © <a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Borders: Natural Earth',
     },
     aoi: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
   },
@@ -43,10 +40,31 @@ const style: StyleSpecification = {
       id: 'base',
       type: 'raster',
       source: 'base',
-      paint: { 'raster-saturation': -0.82, 'raster-brightness-max': 0.36, 'raster-contrast': 0.12, 'raster-fade-duration': 150 },
+      paint: { 'raster-saturation': -0.8, 'raster-brightness-max': 0.44, 'raster-contrast': 0.2, 'raster-fade-duration': 150 },
     },
-    { id: 'lines', type: 'raster', source: 'lines', minzoom: 2.5, paint: { 'raster-opacity': 0.32 } },
-    { id: 'labels', type: 'raster', source: 'labels', minzoom: 3, paint: { 'raster-opacity': 0.8 } },
+    { id: 'coast', type: 'line', source: 'lines', filter: ['==', ['get', 'k'], 'c'], paint: { 'line-color': '#b8a68e', 'line-width': 0.6, 'line-opacity': 0.5 } },
+    { id: 'lines', type: 'line', source: 'lines', filter: ['==', ['get', 'k'], 'b'], paint: { 'line-color': '#e6d8c0', 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 6, 1.1], 'line-opacity': 0.55 } },
+    {
+      id: 'label-country', type: 'symbol', source: 'places', 'source-layer': 'place', maxzoom: 6.5,
+      filter: ['==', ['get', 'class'], 'country'],
+      layout: {
+        'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-transform': 'uppercase', 'text-letter-spacing': 0.12,
+        'text-size': ['interpolate', ['linear'], ['zoom'], 1, 9, 5, 12.5], 'text-max-width': 7,
+      },
+      paint: { 'text-color': '#e9dcc6', 'text-opacity': 0.82, 'text-halo-color': 'rgba(20,16,14,0.85)', 'text-halo-width': 1.3 },
+    },
+    {
+      id: 'label-state', type: 'symbol', source: 'places', 'source-layer': 'place', minzoom: 4.2, maxzoom: 9,
+      filter: ['==', ['get', 'class'], 'state'],
+      layout: { 'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-transform': 'uppercase', 'text-letter-spacing': 0.1, 'text-size': 10, 'text-max-width': 7 },
+      paint: { 'text-color': '#cdbfa8', 'text-opacity': 0.7, 'text-halo-color': 'rgba(20,16,14,0.8)', 'text-halo-width': 1.1 },
+    },
+    {
+      id: 'label-city', type: 'symbol', source: 'places', 'source-layer': 'place', minzoom: 3.6,
+      filter: ['all', ['==', ['get', 'class'], 'city'], ['<=', ['get', 'rank'], ['step', ['zoom'], 3, 5, 6, 6.5, 12]]],
+      layout: { 'text-field': NAME, 'text-font': ['Noto Sans Regular'], 'text-size': ['interpolate', ['linear'], ['zoom'], 4, 10.5, 8, 13], 'text-max-width': 8 },
+      paint: { 'text-color': '#f4ecdc', 'text-opacity': 0.9, 'text-halo-color': 'rgba(20,16,14,0.9)', 'text-halo-width': 1.2 },
+    },
     { id: 'aoi-fill', type: 'fill', source: 'aoi', paint: { 'fill-color': '#f4ecdc', 'fill-opacity': 0.07 } },
     { id: 'aoi-halo', type: 'line', source: 'aoi', paint: { 'line-color': '#14100e', 'line-width': 4, 'line-opacity': 0.55 } },
     { id: 'aoi-line', type: 'line', source: 'aoi', paint: { 'line-color': '#f4ecdc', 'line-width': 1.6 } },
@@ -119,7 +137,7 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
         animate: false,
         coordinates: [[-180, LAT_N], [180, LAT_N], [180, LAT_S], [-180, LAT_S]],
       })
-      map.addLayer({ id: 'fire', type: 'raster', source: 'fire', paint: { 'raster-resampling': 'nearest', 'raster-fade-duration': 0, 'raster-opacity': 0.92 } }, 'lines')
+      map.addLayer({ id: 'fire', type: 'raster', source: 'fire', paint: { 'raster-resampling': 'nearest', 'raster-fade-duration': 0, 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.94, 6.5, 0.72] } }, 'coast')
       map.fire('fire-ready')
     })
 
@@ -257,7 +275,7 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
     const map = mapRef.current
     if (!map || !focus) return
     const b = focus.bbox
-    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 70, duration: 1600, maxZoom: 7 })
+    map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 90, duration: 1600, maxZoom: 6.2 })
   }, [focus])
 
   useEffect(() => {

@@ -96,13 +96,26 @@ export default function App() {
 
   useEffect(() => {
     if (!meta) return
-    const h = readHash()
-    if (h) select(h.bbox, h.name, true)
+    const open = () => {
+      const h = readHash()
+      if (h) select(h.bbox, h.name, true)
+    }
+    open()
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
   }, [meta, select])
 
   const almanac = useMemo(() => (meta && series ? buildAlmanac(meta, series) : null), [meta, series])
   useEffect(() => {
-    if (almanac) setYear(almanac.years[almanac.years.length - 1])
+    if (!almanac) return
+    setYear(almanac.years[almanac.years.length - 1])
+    // show the map at this area's peak month, so the place lights up
+    if (almanac.season) {
+      const top = almanac.monthShare.indexOf(Math.max(...almanac.monthShare))
+      setPlaying(false)
+      setMode('month')
+      setMonth(top)
+    }
   }, [almanac])
 
   const clear = () => {
@@ -139,7 +152,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <section className="plate">
+      <div className="plate">
         {meta && (
           <MapView
             meta={meta}
@@ -208,7 +221,7 @@ export default function App() {
             )}
           </div>
         </div>
-      </section>
+      </div>
 
       <aside className="panel" ref={panel}>
         <header className="masthead">
@@ -341,9 +354,11 @@ function Report(p: {
           </div>
           {l && l.normal > 0 && (
             <div>
-              <dt>{l.year} so far</dt>
+              <dt>{l.year}{a.fullYears.includes(l.year) ? '' : ' so far'}</dt>
               <dd>{l.ratio >= 10 ? Math.round(l.ratio) : l.ratio.toFixed(1)}×</dd>
-              <small>normal for 1 Jan–{MONTHS[lastDate.getUTCMonth()]} {lastDate.getUTCDate()} · above {Math.round(l.percentile)}% of years</small>
+              <small>
+                {a.fullYears.includes(l.year) ? 'a normal year' : `normal for 1 Jan–${MONTHS[lastDate.getUTCMonth()]} ${lastDate.getUTCDate()}`} · above {Math.round(l.percentile)}% of years
+              </small>
             </div>
           )}
         </dl>
