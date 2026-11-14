@@ -7,3 +7,7 @@ dist/
 .vercel
 __pycache__/
 .venv/
+
+# video working files
+video/public/cap/
+video/out/

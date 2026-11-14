@@ -131,7 +131,8 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
     map.touchZoomRotate.disableRotation()
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
     mapRef.current = map
-    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ember = { map, canvas }
+    // handle for scripted screenshots (video/scripts/capture.mjs)
+    ;(window as unknown as Record<string, unknown>).__emberMap = map
     // Add the fire layer as soon as the style itself is parsed - don't wait for every basemap tile.
     const addFire = () => {
       if (!map.getStyle() || map.getSource('fire')) return
