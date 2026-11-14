@@ -34,7 +34,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
         </ol>
         <div className="proof">
           <p className="proof-lede">
-            Tested on years the model never saw: ratios fitted on {tr[0]}–{tr[tr.length - 1]}, then MODIS alone used to predict what VIIRS recorded in {ho[0]}–{ho[ho.length - 1]}.
+            Tested by backcasting, the same direction as the real task: ratios learned from {tr[0]}–{tr[tr.length - 1]}, then MODIS alone used to rebuild {ho[0]}–{ho[ho.length - 1]} — the earliest VIIRS years — and compared with what VIIRS actually recorded.
           </p>
           <table>
             <thead>
@@ -63,7 +63,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
           </table>
           {ours && rawBias !== undefined && (
             <p className="proof-note">
-              Splicing raw records would understate pre-2012 fire by {Math.abs(rawBias).toFixed(0)}%. After harmonization the residual bias is {Math.abs(ours.bias_pct).toFixed(0)}%.
+              Splicing the raw records would understate pre-2012 fire by {Math.abs(rawBias).toFixed(0)}%. After harmonization the residual bias is {Math.abs(ours.bias_pct).toFixed(0)}%.
               {series && Number.isFinite(series.meanRatio) ? ` In the area you selected the applied ratio averages ${series.meanRatio.toFixed(2)}.` : ''}
             </p>
           )}

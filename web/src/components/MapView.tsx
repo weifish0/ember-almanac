@@ -26,7 +26,7 @@ const style: StyleSpecification = {
       maxzoom: 8,
       attribution: 'Fire data: NASA FIRMS (MODIS C6.1, VIIRS S-NPP 375 m) · Imagery: NASA GIBS Blue Marble',
     },
-    lines: { type: 'geojson', data: '/lines.json' },
+    lines: { type: 'geojson', data: `${import.meta.env.BASE_URL}lines.json` },
     places: {
       type: 'vector',
       url: 'https://tiles.openfreemap.org/planet',

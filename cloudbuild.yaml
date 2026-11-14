@@ -21,10 +21,10 @@ steps:
         have=$(ls data/work/agg/*.parquet 2>/dev/null | wc -l)
         if [ "$have" -lt 40 ] || [ "${_REFRESH}" = "1" ]; then
           PARALLEL=10 bash pipeline/download.sh
-          python pipeline/01_aggregate.py
+          python -u pipeline/01_aggregate.py
         fi
-        python pipeline/02_model.py
-        python pipeline/03_tiles.py
+        python -u pipeline/02_model.py
+        python -u pipeline/03_tiles.py
   - id: publish
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: bash

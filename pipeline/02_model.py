@@ -13,13 +13,14 @@ gamma-Poisson prior worth K MODIS detections. Data-rich cells get their own loca
 from their neighbourhood. Two ratios are kept: R_TA for the Terra+Aqua era and R_T for the Terra-only era
 (Nov 2000 - Jul 2002).
 
-Validation is a strict temporal hold-out: fit on the early overlap years, predict the late ones from MODIS
-alone, compare with what VIIRS actually saw.
+Validation is a backcast, the same direction as the real task: fit on the later stable-orbit overlap years,
+reconstruct the earliest VIIRS years from MODIS alone, compare with what VIIRS actually saw.
 
 Outputs: data/work/ratios.npz, data/work/validation.json, data/work/monthly.parquet
 """
 import json
 import pathlib
+import sys
 
 import duckdb
 import numpy as np
@@ -33,7 +34,8 @@ NX, NY = 1440, 720
 NCELL = NX * NY
 AQUA_START = "2002-07-04"   # first Aqua MODIS fire detections in the archive
 VIIRS_START = "2012-01-20"  # first S-NPP VIIRS 375 m detections
-K_GRID = [3, 10, 30, 100, 300]
+K_GRID = [10, 30, 100, 300]
+STABLE_UNTIL = 2021         # last year before Terra/Aqua orbit drift affects detections
 
 
 def build_monthly(con) -> pd.DataFrame:
@@ -125,38 +127,44 @@ def evaluate(hold: pd.DataFrame, pred: np.ndarray) -> dict:
 def main():
     con = duckdb.connect()
     con.execute("SET threads TO 24")
-    m = build_monthly(con)
-    print(f"monthly rows: {len(m):,}")
-
-    cov = con.execute(
-        f"SELECT sat, min(date), max(date), sum(n) FROM read_parquet('{AGG}/*.parquet') GROUP BY 1 ORDER BY 1"
-    ).fetchall()
+    if "--from-monthly" in sys.argv:   # quick local iteration without the gridded daily files
+        m = con.execute(f"SELECT * FROM '{WORK}/monthly.parquet'").df()
+        prev = json.loads((WORK / "validation.json").read_text())["coverage"]
+        cov = [(c["sat"], c["first"], c["last"], c["detections"]) for c in prev]
+    else:
+        m = build_monthly(con)
+        cov = con.execute(
+            f"SELECT sat, min(date), max(date), sum(n) FROM read_parquet('{AGG}/*.parquet') GROUP BY 1 ORDER BY 1"
+        ).fetchall()
+    print(f"monthly rows: {len(m):,}", flush=True)
     for r in cov:
         print("coverage", r)
     last_date = max(r[2] for r in cov)
 
     # Overlap era, complete calendar months only (VIIRS starts 20 Jan 2012).
     ov = m[(m["era"] == 2) & ~((m["year"] == 2012) & (m["month"] == 1))].copy()
-    years = sorted(ov["year"].unique())
-    n_hold = max(3, len(years) // 2)
-    train_years, hold_years = years[:-n_hold], years[-n_hold:]
-    print("train", train_years, "hold-out", hold_years)
-    tr, ho = ov[ov["year"].isin(train_years)], ov[ov["year"].isin(hold_years)].reset_index(drop=True)
-    ho_cell, ho_m = ho["cell"].to_numpy(np.int64), ho["month"].to_numpy(np.int64) - 1
-    ho_M, ho_T = (ho["t"] + ho["a"]).to_numpy(float), ho["t"].to_numpy(float)
+    # Terra and Aqua began drifting from their nominal overpass times in 2022, which changes what MODIS
+    # detects. The pre-VIIRS record we need to translate was flown at nominal orbits, so the model is
+    # learned only from the stable-orbit overlap years.
+    stable = [y for y in sorted(ov["year"].unique()) if y <= STABLE_UNTIL]
+    # Validation mirrors the real task - going *back* in time: learn from the later years, reconstruct
+    # the earliest VIIRS years from MODIS alone. K is tuned on an inner split so the test years stay unseen.
+    hold_years, train_years = stable[:3], stable[3:]
+    inner_val, inner_train = train_years[:3], train_years[3:]
+    print("train", train_years, "backcast hold-out", hold_years, flush=True)
 
-    V = dense(tr, tr["v"].to_numpy(float))
-    M = dense(tr, (tr["t"] + tr["a"]).to_numpy(float))
-    T = dense(tr, tr["t"].to_numpy(float))
+    def split(tr_years, ho_years):
+        tr, ho = ov[ov["year"].isin(tr_years)], ov[ov["year"].isin(ho_years)].reset_index(drop=True)
+        return (dense(tr, tr["v"].to_numpy(float)), dense(tr, (tr["t"] + tr["a"]).to_numpy(float)),
+                dense(tr, tr["t"].to_numpy(float)), ho, ho["cell"].to_numpy(np.int64),
+                ho["month"].to_numpy(np.int64) - 1, (ho["t"] + ho["a"]).to_numpy(float), ho["t"].to_numpy(float))
 
-    # --- choose the prior strength K on the hold-out, at the scale people actually use (1 deg, monthly)
-    k_scores = {}
-    for k in K_GRID:
-        R = fit_ratio(V, M, k)
-        k_scores[k] = evaluate(ho, R[ho_cell, ho_m] * ho_M)["1deg_month"]["mdape"]
+    V, M, T, ho, ho_cell, ho_m, ho_M, ho_T = split(inner_train, inner_val)
+    k_scores = {k: evaluate(ho, fit_ratio(V, M, k)[ho_cell, ho_m] * ho_M)["1deg_month"]["mdape"] for k in K_GRID}
     best_k = min(k_scores, key=k_scores.get)
-    print("K search (MdAPE % at 1 deg / month):", k_scores, "-> K =", best_k)
+    print("K search on inner split (MdAPE % at 1 deg / month):", k_scores, "-> K =", best_k, flush=True)
 
+    V, M, T, ho, ho_cell, ho_m, ho_M, ho_T = split(train_years, hold_years)
     R_TA = fit_ratio(V, M, best_k)
     R_T = fit_ratio(V, T, best_k)
     g_ratio = V.sum() / M.sum()
@@ -176,7 +184,17 @@ def main():
     for name, res in report["methods"].items():
         print(name)
         for s, v in res.items():
-            print("   ", s, v)
+            print("   ", s, v, flush=True)
+
+    # --- what orbit drift does: apply the stable-era model to the drift years
+    drift = ov[ov["year"] > STABLE_UNTIL].reset_index(drop=True)
+    if len(drift):
+        st = ov[ov["year"].isin(stable)]
+        Rs = fit_ratio(dense(st, st["v"].to_numpy(float)), dense(st, (st["t"] + st["a"]).to_numpy(float)), best_k)
+        pred = Rs[drift["cell"].to_numpy(np.int64), drift["month"].to_numpy(np.int64) - 1] * (drift["t"] + drift["a"]).to_numpy(float)
+        report["drift_years_check"] = {"years": [int(y) for y in sorted(drift["year"].unique())], **{
+            k: v for k, v in evaluate(drift, pred).items() if k in ("1deg_month", "5deg_year")}}
+        print("drift check", report["drift_years_check"], flush=True)
 
     # --- empirical error model: multiplicative error of an aggregated estimate vs its size
     d = ho.assign(pred=R_TA[ho_cell, ho_m] * ho_M)
@@ -213,11 +231,13 @@ def main():
         for y, r in m.groupby("year")[["t", "a", "v"]].sum().iterrows()
     }
 
-    # --- final model: refit on every overlap year
-    V = dense(ov, ov["v"].to_numpy(float))
-    M = dense(ov, (ov["t"] + ov["a"]).to_numpy(float))
-    T = dense(ov, ov["t"].to_numpy(float))
+    # --- final model: refit on every stable-orbit overlap year
+    st = ov[ov["year"].isin(stable)]
+    V = dense(st, st["v"].to_numpy(float))
+    M = dense(st, (st["t"] + st["a"]).to_numpy(float))
+    T = dense(st, st["t"].to_numpy(float))
     R_TA, R_T = fit_ratio(V, M, best_k), fit_ratio(V, T, best_k)
+    report["final_fit_years"] = [int(stable[0]), int(stable[-1])]
     report["global_ratio_final"] = round(float(V.sum() / M.sum()), 3)
     report["global_ratio_terra_final"] = round(float(V.sum() / T.sum()), 3)
     report["last_date"] = str(last_date)
