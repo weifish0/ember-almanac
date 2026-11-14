@@ -179,7 +179,7 @@ def evaluate(hold: pd.DataFrame, pred: np.ndarray) -> dict:
 
 def main():
     con = duckdb.connect()
-    con.execute("SET threads TO 24")
+    con.execute("SET threads TO 8")
     if "--from-monthly" in sys.argv:   # quick local iteration without the gridded daily files
         m = con.execute(f"SELECT * FROM '{WORK}/monthly.parquet'").df()
         prev_report = json.loads((WORK / "validation.json").read_text())

@@ -297,11 +297,12 @@ export async function loadSeries(meta: Meta, bbox: BBox, onProgress?: (done: num
 
 // ---------------------------------------------------------------------------------------------
 // Global monthly climatology (map layer)
-export type Clim = { cells: Uint32Array; q: Uint8Array /* n * 12, log coded */ }
+export type Clim = { cells: Uint32Array; q: Uint8Array /* n * 12, log coded */; rate: Uint8Array | null /* n, ratio x 20 */ }
 export const decodeClim = (q: number) => (Math.pow(2, q / 17) - 1) / 64
 
 export async function loadClim(): Promise<Clim> {
   const buf = await fetchBin(`${BASE}/clim.bin.gz`)
   const n = new DataView(buf).getUint32(0, true)
-  return { cells: new Uint32Array(buf.slice(4, 4 + n * 4)), q: new Uint8Array(buf, 4 + n * 4, n * 12) }
+  const rate = buf.byteLength >= 4 + n * 17 ? new Uint8Array(buf, 4 + n * 16, n) : null
+  return { cells: new Uint32Array(buf.slice(4, 4 + n * 4)), q: new Uint8Array(buf, 4 + n * 4, n * 12), rate }
 }

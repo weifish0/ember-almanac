@@ -4,7 +4,8 @@ Outputs (web/public/data):
   tiles/{tx}_{ty}.bin.gz  one per 10 x 10 degree block that ever burned. Holds, for every 0.25 degree cell,
                           the *raw* daily detection counts of Terra, Aqua and S-NPP plus that cell's 12 monthly
                           ratios. The browser applies the harmonization itself, so nothing is hidden.
-  clim.bin.gz             harmonized monthly climatology for the whole planet (the map layer)
+  clim.bin.gz             harmonized monthly climatology for the whole planet + each cell's mean exchange rate
+                          (the map layers)
   meta.json               grid definition, sensor eras, VIIRS outage days, tile index, validation report
 
 Tile layout (little endian, before gzip):
@@ -60,8 +61,8 @@ def main():
     n20_sql = ", ".join(str(d) for d in n20_days) or "-1"
 
     con = duckdb.connect()
-    con.execute("SET threads TO 24")
-    con.execute("SET memory_limit = '20GB'")
+    con.execute("SET threads TO 8")
+    con.execute("SET memory_limit = '12GB'")
     cell, day, t, a, v, j = con.execute(
         f"""
         SELECT * FROM (
@@ -131,7 +132,11 @@ def main():
     clim = clim / (n_years * days)                         # mean harmonized detections per day
     keep = np.flatnonzero((clim * days).sum(axis=1) >= 0.2)    # at least one detection every 5 years
     q = np.clip(np.round(17 * np.log2(1 + 64 * clim[keep])), 0, 255).astype(np.uint8)
-    blob = gzip.compress(struct.pack("<I", len(keep)) + keep.astype("<u4").tobytes() + q.tobytes(), 9, mtime=0)
+    # each cell's exchange rate (VIIRS per MODIS detection), averaged over the year by how much burns each month
+    w = clim[keep] * days
+    rate = (R_TA[keep] * w).sum(axis=1) / np.maximum(w.sum(axis=1), 1e-9)
+    rate_q = np.clip(np.round(rate * 20), 1, 255).astype(np.uint8)
+    blob = gzip.compress(struct.pack("<I", len(keep)) + keep.astype("<u4").tobytes() + q.tobytes() + rate_q.tobytes(), 9, mtime=0)
     (OUT / "clim.bin.gz").write_bytes(blob)
     print(f"climatology: {len(keep):,} cells, {len(blob) / 1e6:.2f} MB")
 

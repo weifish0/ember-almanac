@@ -57,3 +57,14 @@ export const MONTH_COLORS: [number, number, number][] = [
   [168, 82, 206], // Nov
   [116, 100, 228], // Dec
 ]
+
+/** Exchange-rate map: 2x (deep teal) -> 4x (pale sand) -> 8x (magenta). Distinct from the fire ramps on purpose. */
+export const RATE = ramp([
+  [0, 20, 110, 130],
+  [0.25, 70, 170, 160],
+  [0.45, 232, 222, 190],
+  [0.7, 226, 130, 150],
+  [1, 170, 40, 150],
+])
+export const RATE_MIN = 2
+export const RATE_MAX = 8

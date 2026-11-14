@@ -175,6 +175,11 @@ export default function App() {
             <button role="tab" aria-selected={mode === 'peak'} onClick={() => { setMode('peak'); setPlaying(false) }}>
               Peak month
             </button>
+            {clim?.rate && (
+              <button role="tab" aria-selected={mode === 'rate'} onClick={() => { setMode('rate'); setPlaying(false) }}>
+                Exchange rate
+              </button>
+            )}
           </div>
           {mode === 'month' ? (
             <div className="months">
@@ -191,7 +196,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-          ) : (
+          ) : mode === 'rate' ? null : (
             <div className="months wheel">
               {MONTHS.map((m, i) => (
                 <span key={m} style={{ background: `rgb(${MONTH_COLORS[i].join(',')})` }}>
@@ -212,12 +217,19 @@ export default function App() {
                 <div className="ramp" />
                 <div className="ramp-labels"><span>rare</span><span>{MONTH_LONG[month]} · typical fire detections per day</span><span>intense</span></div>
               </>
+            ) : mode === 'rate' ? (
+              <>
+                <div className="ramp ramp-rate" />
+                <div className="ramp-labels"><span>2×</span><span>VIIRS detections per MODIS detection, learned locally</span><span>8×</span></div>
+              </>
             ) : (
               <div className="ramp-labels"><span>Colour = the month each place normally burns most</span></div>
             )}
             {hover && hoverValue !== null && (
               <div className="hover-read">
-                {hoverValue >= 0.005 ? `${fmt(hoverValue)} per day in ${MONTHS[month]}` : `quiet in ${MONTHS[month]}`} · peaks in {MONTH_LONG[hover.peak]}
+                {mode === 'rate' && clim?.rate
+                  ? `1 MODIS detection ≈ ${(clim.rate[hover.value] / 20).toFixed(1)} VIIRS detections here`
+                  : `${hoverValue >= 0.005 ? `${fmt(hoverValue)} per day in ${MONTHS[month]}` : `quiet in ${MONTHS[month]}`} · peaks in ${MONTH_LONG[hover.peak]}`}
               </div>
             )}
           </div>

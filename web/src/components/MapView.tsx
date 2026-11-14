@@ -3,7 +3,7 @@ import maplibregl, { type CanvasSource, type ExpressionSpecification, type GeoJS
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { FeatureCollection } from 'geojson'
 import { decodeClim, snapBBox, type BBox, type Clim, type Meta } from '../lib/data'
-import { GLOW, MONTH_COLORS } from '../lib/color'
+import { GLOW, MONTH_COLORS, RATE, RATE_MAX, RATE_MIN } from '../lib/color'
 
 const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
 const LAT_N = 78
@@ -86,7 +86,7 @@ const rect = (b: BBox): FeatureCollection => ({
   ],
 })
 
-export type MapMode = 'month' | 'peak'
+export type MapMode = 'month' | 'peak' | 'rate'
 type Props = {
   meta: Meta
   clim: Clim | null
@@ -253,6 +253,13 @@ export function MapView({ meta, clim, month, mode, bbox, drawing, focus, onBBox,
           if (q < 6) continue
           // q is log-coded; stretch 0.01 .. 60 detections/day over the ramp
           color = lut[Math.min(255, Math.round((q - 6) * 1.28))]
+        } else if (mode === 'rate') {
+          const a = g.annual[i]
+          if (a < 2 || !clim.rate) continue
+          const t = Math.min(1, Math.max(0, (clim.rate[i] / 20 - RATE_MIN) / (RATE_MAX - RATE_MIN)))
+          const k = Math.round(t * 255) * 4
+          const alpha = Math.min(255, Math.round(90 + 165 * Math.min(1, Math.log10(a / 2) / 2.2)))
+          color = (alpha << 24) | (RATE[k + 2] << 16) | (RATE[k + 1] << 8) | RATE[k]
         } else {
           const a = g.annual[i]
           if (a < 2) continue

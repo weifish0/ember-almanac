@@ -12,3 +12,4 @@ __pycache__/
 video/public/cap/
 video/out/
 video/public/vo/
+web/public/data/
