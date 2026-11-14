@@ -30,6 +30,8 @@ export type Annual = {
   /** before both MODIS instruments were flying for a whole year: shown, not used in statistics */
   terraOnly: boolean
 }
+/** A stretch of the normal year when burning is under way (there can be more than one, e.g. two harvests). */
+export type Period = { start: number; end: number; length: number; share: number; peak: number }
 export type Season = { start: number; end: number; peak: number; length: number; share: number; concentration: number }
 export type Almanac = {
   years: number[]
@@ -39,6 +41,7 @@ export type Almanac = {
   clim: { mean: Float32Array; p10: Float32Array; p25: Float32Array; p50: Float32Array; p75: Float32Array; p90: Float32Array }
   monthShare: number[]
   season: Season | null
+  periods: Period[]
   annual: Annual[]
   meanAnnual: number
   trend: { slopePct: number; p: number; tau: number } | null
@@ -235,6 +238,41 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
     }
   }
 
+  // burning periods: stretches where the normal curve stays above a fifth of its peak
+  const periods: Period[] = []
+  if (season) {
+    const cm = circSmooth(clim.mean, 7)
+    const thr = 0.2 * Math.max(...cm)
+    const on = Array.from(cm, (v) => v > thr)
+    // close gaps shorter than 15 days (circular)
+    for (let k = 0; k < DOY_N; k++) {
+      if (on[k] || !on[(k - 1 + DOY_N) % DOY_N]) continue
+      let len = 0
+      while (len < 15 && !on[(k + len) % DOY_N]) len++
+      if (len < 15) for (let j = 0; j < len; j++) on[(k + j) % DOY_N] = true
+    }
+    if (on.some((v) => !v)) {
+      let st = 0
+      while (on[st]) st++ // start scanning from an "off" day so runs don't straddle the array end
+      for (let i = 1; i <= DOY_N; i++) {
+        const k = (st + i) % DOY_N
+        if (!on[k]) continue
+        let len = 0
+        let sum = 0
+        let pk = k
+        while (len < DOY_N && on[(k + len) % DOY_N]) {
+          const j = (k + len) % DOY_N
+          sum += clim.mean[j]
+          if (cm[j] > cm[pk]) pk = j
+          len++
+        }
+        if (sum / totalMean >= 0.08 && len >= 10) periods.push({ start: k, end: (k + len - 1) % DOY_N, length: len, share: sum / totalMean, peak: pk })
+        i += len
+      }
+      periods.sort((a, b) => a.start - b.start)
+    }
+  }
+
   // trend over complete years
   let trend: Almanac['trend'] = null
   if (fullTotals.length >= 10 && meanAnnual > 0) {
@@ -314,7 +352,7 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
   nz.sort((a, b) => a - b)
   const scaleMax = Math.max(1, quantileSorted(nz, 0.995))
 
-  return { years, fullYears, daily, smooth, clim, monthShare, season, annual, meanAnnual, trend, episodes, latest, scaleMax, sparse }
+  return { years, fullYears, daily, smooth, clim, monthShare, season, periods, annual, meanAnnual, trend, episodes, latest, scaleMax, sparse }
 }
 
 export function fmt(n: number): string {

@@ -47,11 +47,8 @@ export function SeasonChart({ almanac, year }: { almanac: Almanac; year: number 
     return d + 'Z'
   }
   const s = almanac.season
-  const seasonRects = s
-    ? s.start + s.length <= DOY_N
-      ? [[s.start, s.length]]
-      : [[s.start, DOY_N - s.start], [0, s.start + s.length - DOY_N]]
-    : []
+  const spans = almanac.periods.length >= 2 ? almanac.periods : s ? [s] : []
+  const seasonRects = spans.flatMap((p) => (p.start + p.length <= DOY_N ? [[p.start, p.length]] : [[p.start, DOY_N - p.start], [0, p.start + p.length - DOY_N]]))
   return (
     <div ref={ref} className="chart">
       {W > 0 && (
@@ -87,14 +84,14 @@ export function SeasonChart({ almanac, year }: { almanac: Almanac; year: number 
               {m}
             </text>
           ))}
-          {s && (
-            <g>
-              <line x1={x(s.peak)} x2={x(s.peak)} y1={T} y2={T + ph} className="peak-line" />
-              <text x={x(s.peak) + (s.peak > 300 ? -5 : 5)} y={T + 10} textAnchor={s.peak > 300 ? 'end' : 'start'} className="peak-label">
-                normal peak · {doyLabel(s.peak)}
+          {spans.map((p, i) => (
+            <g key={i}>
+              <line x1={x(p.peak)} x2={x(p.peak)} y1={T} y2={T + ph} className="peak-line" />
+              <text x={x(p.peak) + (p.peak > 300 ? -5 : 5)} y={T + 10} textAnchor={p.peak > 300 ? 'end' : 'start'} className="peak-label">
+                {spans.length > 1 ? `peak · ${doyLabel(p.peak)}` : `normal peak · ${doyLabel(p.peak)}`}
               </text>
             </g>
-          )}
+          ))}
           {hover !== null && (
             <g>
               <line x1={x(hover)} x2={x(hover)} y1={T} y2={T + ph} className="hover-line" />
@@ -111,7 +108,7 @@ export function SeasonChart({ almanac, year }: { almanac: Almanac; year: number 
         <span><i className="sw sw-inner" /> middle half of years</span>
         <span><i className="sw sw-median" /> median</span>
         {year !== null && <span><i className="sw sw-year" /> {year}</span>}
-        {s && <span><i className="sw sw-season" /> fire season (80% of burning)</span>}
+        {s && <span><i className="sw sw-season" /> {spans.length > 1 ? 'burning periods' : 'fire season (80% of burning)'}</span>}
       </div>
     </div>
   )

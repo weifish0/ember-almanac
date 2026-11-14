@@ -292,9 +292,18 @@ function lead(a: Almanac): string[] {
     out.push(`Satellites rarely see fire here — about ${fmt(a.meanAnnual)} detections in a typical year, too few to define a season. The calendar below still shows every detection since 2000.`)
     return out
   }
+  if (a.periods.length >= 2) {
+    const ps = a.periods
+    const parts = ps.map((p) => `${doyLabel(p.start)} to ${doyLabel(p.end)} (${Math.round(p.share * 100)}% of a normal year’s fire, peaking around ${doyLabel(p.peak)})`)
+    const count = ps.length === 2 ? 'two' : ps.length === 3 ? 'three' : 'several'
+    out.push(`Burning here comes in ${count} pulses a year: ${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}.`)
+    return out
+  }
   const s = a.season
   const top = a.monthShare.map((v, i) => [v, i] as const).sort((x, y) => y[0] - x[0])
-  const months = top[0][0] > 0.5 ? MONTH_LONG[top[0][1]] : `${MONTH_LONG[Math.min(top[0][1], top[1][1])]} and ${MONTH_LONG[Math.max(top[0][1], top[1][1])]}`
+  const lo = Math.min(top[0][1], top[1][1])
+  const hi = Math.max(top[0][1], top[1][1])
+  const months = top[0][0] > 0.5 ? MONTH_LONG[top[0][1]] : lo === 0 && hi === 11 ? 'December and January' : `${MONTH_LONG[lo]} and ${MONTH_LONG[hi]}`
   const tight = s.length <= 75 ? 'a short, sharp season' : s.length <= 150 ? 'a well-defined season' : 'a long, drawn-out season'
   out.push(
     `Burning here is ${tight}: in a normal year 80% of it falls between ${doyLabel(s.start)} and ${doyLabel(s.end)} (${s.length} days), peaking around ${doyLabel(s.peak)}. ${months} ${top[0][0] > 0.5 ? 'alone carries' : 'together carry'} ${Math.round((top[0][0] > 0.5 ? top[0][0] : top[0][0] + top[1][0]) * 100)}% of the year’s fire.`,
@@ -378,7 +387,7 @@ function Report(p: {
           <span>no fire</span>
           <i className="scale-ramp" />
           <span>{fmt(a.scaleMax)}+ a day</span>
-          {a.season && <span className="scale-season"><i /> normal fire season, ▼ peak</span>}
+          {a.season && <span className="scale-season"><i /> {a.periods.length >= 2 ? 'normal burning periods' : 'normal fire season'}, ▼ peak</span>}
         </div>
       </section>
 

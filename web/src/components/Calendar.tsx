@@ -43,8 +43,8 @@ export function Calendar({ meta, series, almanac, smooth, year, onYear }: Props)
     // season window + month ticks
     ctx.font = '500 10.5px "Instrument Sans", sans-serif'
     ctx.textBaseline = 'alphabetic'
-    if (almanac.season) {
-      const { start, length, peak } = almanac.season
+    const spans = almanac.periods.length >= 2 ? almanac.periods : almanac.season ? [almanac.season] : []
+    for (const { start, length, peak } of spans) {
       ctx.fillStyle = 'rgba(222, 98, 32, 0.9)'
       const seg = (a: number, len: number) => ctx.fillRect(GUTTER_L + a * cw, TOP - 7, len * cw, 3)
       if (start + length <= DOY_N) seg(start, length)
