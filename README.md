@@ -80,7 +80,7 @@ If the method works, the change in the harmonized record between 2003–2011 and
 | Taiwan | −23% | −30% |
 | Northern California | +165% | +199% |
 
-Splicing the raw records instead would report +300% to +500% for every one of these.
+Splicing the raw records instead would report increases of roughly +200% to +1,000% for these same regions.
 
 ## NASA data used
 
