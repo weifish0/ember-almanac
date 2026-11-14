@@ -350,7 +350,7 @@ function Report(p: {
           <div>
             <dt>Since {a.fullYears[0]}</dt>
             <dd>{a.trend ? `${a.trend.slopePct >= 0 ? '+' : '−'}${Math.abs(a.trend.slopePct).toFixed(1)}%` : '–'}</dd>
-            <small>{a.trend ? `per year · ${a.trend.p < 0.05 ? 'a significant trend' : 'not a clear trend'} (p = ${a.trend.p < 0.001 ? '<0.001' : a.trend.p.toFixed(2)})` : ''}</small>
+            <small>{a.trend ? `per year · ${a.trend.p < 0.05 ? 'a significant trend' : 'not a clear trend'} (p ${a.trend.p < 0.001 ? '< 0.001' : a.trend.p < 0.01 ? `= ${a.trend.p.toFixed(3)}` : `= ${a.trend.p.toFixed(2)}`})` : ''}</small>
           </div>
           {l && l.normal > 0 && (
             <div>
@@ -393,7 +393,9 @@ function Report(p: {
           </div>
           {selected && (
             <p className="sec-note">
-              {selected.complete
+              {selected.terraOnly
+                ? `Only the Terra satellite was flying for ${selected.year === 2002 ? 'half of 2002' : selected.year}. It is drawn here but kept out of the statistics.`
+                : selected.complete
                 ? `${selected.year} ran ${Math.abs(selected.anomalyPct) < 8 ? 'close to normal' : `${Math.abs(Math.round(selected.anomalyPct))}% ${selected.anomalyPct > 0 ? 'above' : 'below'} normal`} — ${rank === 1 ? 'the most fire of any year' : `ranked ${rank} of ${complete.length} years`}.`
                 : `${selected.year} is still in progress (data to ${shortDate(meta.lastDay)}).`}
               {selected.estimated > selected.total * 0.5 ? ' Estimated from MODIS.' : ''}
@@ -417,7 +419,7 @@ function Report(p: {
       {a.episodes.length > 0 && (
         <section>
           <div className="sec-head"><h2>When the pattern broke</h2></div>
-          <p className="sec-note">Runs of five days or more above the 90th percentile for that time of year, largest first.</p>
+          <p className="sec-note">Runs of five days or more above the 90th percentile for that time of year, largest first. Searched from July 2002, when both MODIS instruments were flying.</p>
           <ol className="episodes">
             {a.episodes.slice(0, 8).map((e: Episode) => (
               <li key={e.startDay}>

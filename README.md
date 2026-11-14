@@ -64,7 +64,23 @@ The yearly chart in the app carries an 80% interval on every pre-2012 bar, taken
 - Cloud and thick smoke hide fires from both sensors.
 - Harmonization restores *how much* burned, not the exact day. MODIS misses small fires outright, so the pre-2012 record should be read at weekly scale or coarser.
 - VIIRS itself has gaps. S-NPP returned no fire data from 27 July to 10 August 2022, for example. The pipeline detects such days (global VIIRS/MODIS ratio below 2; 55 days in all) and fills them from MODIS the same way as the pre-VIIRS era, flagged as estimates.
+- November 2000 – July 2002 had only Terra. Those months are drawn in the calendar but kept out of the season statistics, the trend and the episode ranking, which start in 2003.
+- The ratio is linear in MODIS detections. Very large fires add VIIRS pixels faster than MODIS pixels, so a region whose fires grew much larger after 2012 can be understated before 2012; the yearly interval is there for that reason.
 - The archive used here ends on 31 December 2025.
+
+### Sanity check: trends survive harmonization
+
+If the method works, the change in the harmonized record between 2003–2011 and 2012–2021 should match the change MODIS alone saw over the same years, because MODIS flew through both.
+
+| Region | Raw MODIS change | Harmonized change |
+|---|---|---|
+| Punjab & Haryana | +8% | +8% |
+| Miombo woodlands | +2% | +2% |
+| Northern Thailand | −17% | −14% |
+| Taiwan | −23% | −30% |
+| Northern California | +165% | +199% |
+
+Splicing the raw records instead would report +300% to +500% for every one of these.
 
 ## NASA data used
 

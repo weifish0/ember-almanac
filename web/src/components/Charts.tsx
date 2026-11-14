@@ -125,7 +125,7 @@ export function AnnualChart({ almanac, year, onYear }: { almanac: Almanac; year:
   const R = 26
   const T = 14
   const B = 24
-  const rows = almanac.annual.filter((a) => a.year >= almanac.fullYears[0])
+  const rows = almanac.annual.filter((a) => a.year >= 2001)
   const pw = Math.max(50, W - L - R)
   const ph = H - T - B
   const max = niceMax(Math.max(...rows.map((r) => Math.max(r.hi, r.total))) * 1.02)
@@ -158,7 +158,7 @@ export function AnnualChart({ almanac, year, onYear }: { almanac: Almanac; year:
               <g key={r.year} onClick={() => onYear(r.year === year ? null : r.year)} className="bar-g">
                 <title>
                   {r.year}: {fmt(r.total)} VIIRS-equivalent detections{est ? ` (80% interval ${fmt(r.lo)}–${fmt(r.hi)})` : ''} · raw MODIS {fmt(r.rawModis)}
-                  {r.complete ? '' : ' · year in progress'}
+                  {r.terraOnly ? ' · Terra only, not used in the statistics' : r.complete ? '' : ' · year in progress'}
                 </title>
                 <rect x={x(i)} y={T} width={bw} height={ph} fill="transparent" />
                 <rect

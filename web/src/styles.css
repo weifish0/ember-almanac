@@ -156,7 +156,7 @@ select { background: var(--paper); border: 1px solid var(--rule); border-radius:
 .bar-est { fill: url(#hatch); }
 .hatch-bg { fill: color-mix(in oklch, var(--ember) 30%, var(--paper)); }
 .hatch-line { stroke: var(--ember-deep); stroke-width: 1.6; }
-.bar-partial { opacity: 0.45; }
+.bar-partial { opacity: 0.4; }
 .bar-on { stroke: var(--ink); stroke-width: 1.6; }
 .bar-g:hover .bar { filter: brightness(0.92); }
 .whisker { stroke: var(--ink); stroke-width: 1.1; }

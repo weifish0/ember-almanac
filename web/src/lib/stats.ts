@@ -27,6 +27,8 @@ export type Annual = {
   rawModis: number
   rawViirs: number
   complete: boolean
+  /** before both MODIS instruments were flying for a whole year: shown, not used in statistics */
+  terraOnly: boolean
 }
 export type Season = { start: number; end: number; peak: number; length: number; share: number; concentration: number }
 export type Almanac = {
@@ -111,7 +113,10 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
   const years: number[] = []
   for (let y = 2000; y <= lastYear; y++) years.push(y)
   const lastComplete = tab.month[meta.lastDay] === 11 && meta.lastDay === dateToDay(lastYear, 11, 31) ? lastYear : lastYear - 1
-  const fullYears = years.filter((y) => y > firstYear && y <= lastComplete)
+  // Statistics use complete years with both MODIS instruments flying (2003 on). The Terra-only start of the
+  // record (Nov 2000 - Jul 2002) is still drawn in the calendar, but its estimates are too noisy to rank against.
+  const firstStatYear = Math.max(firstYear + 1, tab.year[meta.aquaStartDay] + 1)
+  const fullYears = years.filter((y) => y >= firstStatYear && y <= lastComplete)
 
   // 7-day centred mean on the continuous series
   const sm = new Float32Array(nDays)
@@ -180,7 +185,7 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
       rawModis += s.terra[d] + s.aqua[d]
       rawViirs += s.viirs[d]
     }
-    return { year: y, total, estimated, rawModis, rawViirs, complete: fullYears.includes(y) }
+    return { year: y, total, estimated, rawModis, rawViirs, complete: fullYears.includes(y), terraOnly: y < firstStatYear }
   })
   const fullTotals = annualRaw.filter((a) => a.complete).map((a) => a.total)
   const meanAnnual = fullTotals.reduce((a, b) => a + b, 0) / Math.max(1, fullTotals.length)
@@ -269,7 +274,7 @@ export function buildAlmanac(meta: Meta, s: Series): Almanac {
       run = []
       gap = 0
     }
-    for (let d = meta.firstDay; d <= meta.lastDay; d++) {
+    for (let d = Math.max(meta.firstDay, meta.aquaStartDay); d <= meta.lastDay; d++) {
       const k = tab.doy[d]
       if (sm[d] > clim.p90[k] && sm[d] >= floor) {
         run.push(d)
