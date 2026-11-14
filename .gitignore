@@ -1,0 +1,9 @@
+data/raw/
+data/work/
+node_modules/
+dist/
+.DS_Store
+.env*
+.vercel
+__pycache__/
+.venv/
