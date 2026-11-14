@@ -35,7 +35,8 @@ export type Meta = {
   generated: string
 }
 
-const BASE = (import.meta.env.VITE_DATA_BASE as string | undefined) ?? '/data'
+// Browser-ready data lives in a public Google Cloud Storage bucket, written by the pipeline (see cloudbuild.yaml).
+const BASE = (import.meta.env.VITE_DATA_BASE as string | undefined) ?? 'https://storage.googleapis.com/ember-almanac-ffe3bb/v1'
 
 async function fetchBin(url: string): Promise<ArrayBuffer> {
   const res = await fetch(url)
