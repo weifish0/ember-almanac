@@ -56,8 +56,8 @@ def main():
     last_date = dt.date.fromisoformat(report["last_date"])
 
     con = duckdb.connect()
-    con.execute("SET threads TO 8")
-    con.execute("SET memory_limit = '14GB'")
+    con.execute("SET threads TO 24")
+    con.execute("SET memory_limit = '20GB'")
     cell, day, t, a, v = con.execute(
         f"""
         SELECT cell,

@@ -37,7 +37,7 @@ def aggregate(zip_path: pathlib.Path) -> None:
     with zipfile.ZipFile(zip_path) as z:
         z.extractall(tmp)
     con = duckdb.connect()
-    con.execute("SET threads TO 8")
+    con.execute("SET threads TO 24")
     is_modis = sensor == "modis"
     conf = "TRY_CAST(confidence AS INTEGER) >= 30" if is_modis else "lower(CAST(confidence AS VARCHAR)) <> 'l'"
     sat = "upper(substr(CAST(satellite AS VARCHAR), 1, 1))"

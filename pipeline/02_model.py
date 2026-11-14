@@ -124,7 +124,7 @@ def evaluate(hold: pd.DataFrame, pred: np.ndarray) -> dict:
 
 def main():
     con = duckdb.connect()
-    con.execute("SET threads TO 8")
+    con.execute("SET threads TO 24")
     m = build_monthly(con)
     print(f"monthly rows: {len(m):,}")
 

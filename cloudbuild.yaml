@@ -1,0 +1,46 @@
+# Runs the whole data pipeline on Google Cloud Build (fast network to NASA, 32 cores) and publishes the
+# browser-ready files to a public bucket. Gridded intermediates are cached in the bucket between runs.
+steps:
+  - id: restore-cache
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        mkdir -p data/work/agg
+        gcloud storage rsync -r gs://${_BUCKET}/cache/agg data/work/agg || true
+        ls data/work/agg | wc -l
+  - id: pipeline
+    name: python:3.12
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        pip install -q duckdb numpy pandas pyarrow
+        have=$(ls data/work/agg/*.parquet 2>/dev/null | wc -l)
+        if [ "$have" -lt 40 ] || [ "${_REFRESH}" = "1" ]; then
+          PARALLEL=10 bash pipeline/download.sh
+          python pipeline/01_aggregate.py
+        fi
+        python pipeline/02_model.py
+        python pipeline/03_tiles.py
+  - id: publish
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        gcloud storage rsync -r data/work/agg gs://${_BUCKET}/cache/agg
+        gcloud storage cp data/work/validation.json data/work/ratios.npz data/work/monthly.parquet gs://${_BUCKET}/cache/
+        gcloud storage rsync -r --delete-unmatched-destination-objects --cache-control="public, max-age=600" web/public/data gs://${_BUCKET}/${_VERSION}
+substitutions:
+  _BUCKET: ember-almanac-ffe3bb
+  _VERSION: v1
+  _REFRESH: "0"
+options:
+  machineType: E2_HIGHCPU_32
+  diskSizeGb: 200
+  logging: CLOUD_LOGGING_ONLY
+timeout: 7200s
