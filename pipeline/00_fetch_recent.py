@@ -5,7 +5,7 @@ The yearly archives (step 1) end on 31 December of last year. Everything after t
 https://firms.modaps.eosdis.nasa.gov/api/area/ in 5-day world windows:
   MODIS_SP / VIIRS_SNPP_SP          science quality, with the fire-type label ("typed")
   MODIS_NRT / VIIRS_SNPP_NRT        near real time, no fire-type label yet
-  VIIRS_NOAA20_NRT                  NOAA-20, the continuity sensor once Suomi NPP stops delivering data
+  VIIRS_NOAA20_SP / VIIRS_NOAA20_NRT  NOAA-20, the continuity sensor for S-NPP outages and after S-NPP stopped
 
 Needs a free MAP_KEY in the environment variable FIRMS_MAP_KEY (never commit it). The API meters use, so the
 script watches the transaction counter and waits when the 10-minute allowance is nearly spent. Each window is
@@ -34,7 +34,7 @@ RES, NX, NY = 0.25, 1440, 720
 SOURCES = [
     ("MODIS_SP", "MODIS_NRT", None, YEAR_START),
     ("VIIRS_SNPP_SP", "VIIRS_SNPP_NRT", "N", YEAR_START),
-    (None, "VIIRS_NOAA20_NRT", "J", None),      # only its near-real-time range: the continuity sensor
+    ("VIIRS_NOAA20_SP", "VIIRS_NOAA20_NRT", "J", YEAR_START),   # the continuity sensor
 ]
 
 

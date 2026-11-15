@@ -12,6 +12,8 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
   const m = v.methods
   const ho = v.holdout_years
   const tr = v.train_years
+  const n20 = v.noaa20
+  const n20m = n20?.methods[n20.model ?? 'hierarchical']
   const ours = m.hierarchical?.['1deg_month']
   const rawBias = m.raw_modis?.['1deg_month']?.bias_pct
   return (
@@ -20,7 +22,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
       <div className="method-cols">
         <ol className="steps">
           <li>
-            <div><b>Same rules for both sensors.</b> Every NASA FIRMS detection from MODIS (Terra and Aqua, 1 km, since 2000) and VIIRS (Suomi NPP, 375 m, since 2012) is screened the same way — vegetation fires only, low-confidence detections dropped — and counted on one 0.25° daily grid.</div>
+            <div><b>Same rules for both sensors.</b> Every NASA FIRMS detection from MODIS (Terra and Aqua, 1 km, since 2000) and VIIRS (Suomi NPP since 2012, NOAA-20 since 2018, 375 m) is screened the same way — vegetation fires only, low-confidence detections dropped — and counted on one 0.25° daily grid.</div>
           </li>
           <li>
             <div><b>Learn the exchange rate where they overlap.</b> VIIRS sees {v.global_ratio_final.toFixed(1)}× more fire pixels than MODIS worldwide, but the rate is not a constant{v.ratio_spread ? ` — it runs from ${v.ratio_spread.p05.toFixed(1)}× to ${v.ratio_spread.p95.toFixed(1)}× across the burning world` : ''}, and it shifts through the season. So the ratio is learned per grid cell and per month from the years both flew.</div>
@@ -31,10 +33,12 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
           <li>
             <div><b>Restate MODIS in VIIRS terms.</b> Before 2012 the calendar shows MODIS detections × the local ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 it shows Suomi NPP VIIRS as observed{meta.viirsGapDays?.length ? `, except ${meta.viirsGapDays.length} outage days that MODIS fills the same way` : ''}. Raw counts stay one hover away.</div>
           </li>
-          {v.noaa20 && meta.noaa20Days?.length ? (
+          {n20 && n20m && meta.noaa20Days?.length ? (
             <li>
               <div>
-                <b>Carry on when the reference stops.</b> Suomi NPP delivered its last fire data on {v.snpp_last_date}. From then on, and on {meta.noaa20Days.filter((d) => d <= (meta.snppLastDay ?? 0)).length} earlier outage days, the record continues on NOAA-20 VIIRS — the same instrument design — restated through its own local ratio ({v.noaa20.global_ratio.toFixed(2)}× worldwide). On held-out years ({v.noaa20.holdout_years[0]}–{v.noaa20.holdout_years[v.noaa20.holdout_years.length - 1]}) that hand-over has a typical error of {v.noaa20.methods.hierarchical['1deg_month'].mdape.toFixed(0)}% per 1° cell and month, and {v.noaa20.methods.hierarchical['5deg_year'].mdape.toFixed(0)}% per region and year.
+                <b>Carry on when the reference stops.</b> Suomi NPP delivered its last fire data on {v.snpp_last_date}. From then on, and on {meta.noaa20Days.filter((d) => d <= (meta.snppLastDay ?? 0)).length} earlier days when it was down, the record continues on NOAA-20 VIIRS — the same instrument design, 50 minutes away on the same orbit. {n20.model === 'global_factor'
+                  ? `Tested on ${n20.holdout_years[0]}–${n20.holdout_years[n20.holdout_years.length - 1]}, a local ratio did no better than one factor of ${n20.global_ratio.toFixed(2)}×, so the simple factor is used`
+                  : `It is restated through its own local ratio (${n20.global_ratio.toFixed(2)}× worldwide)`}: typical error {n20m['1deg_month'].mdape.toFixed(0)}% per 1° cell and month, {n20m['5deg_year'].mdape.toFixed(0)}% per region and year.
               </div>
             </li>
           ) : null}
@@ -75,7 +79,7 @@ export function Method({ meta, series }: { meta: Meta; series: Series | null }) 
             </p>
           )}
           <p className="proof-note quiet">
-            Limits: a detection is a hot pixel at overpass time, not a fire or a burned area; cloud and smoke hide fires from both sensors. Harmonization restores how much burned, not the exact day: MODIS misses small fires outright, so read pre-2012 at weekly scale or coarser, with the interval shown in the yearly chart. Ratios are learned from {v.final_fit_years ? `${v.final_fit_years[0]}–${v.final_fit_years[1]}` : 'the overlap years'}, before Terra and Aqua began drifting from their nominal orbits. Data: NASA FIRMS archive, {v.coverage.reduce((s, c) => s + c.detections, 0).toLocaleString()} screened detections through {v.last_date}.
+            Limits: a detection is a hot pixel at overpass time, not a fire or a burned area; cloud and smoke hide fires from both sensors. Harmonization restores how much burned, not the exact day: MODIS misses small fires outright, so read pre-2012 at weekly scale or coarser, with the interval shown in the yearly chart. Ratios are learned from {v.final_fit_years ? `${v.final_fit_years[0]}–${v.final_fit_years[1]}` : 'the overlap years'}, before Terra and Aqua began drifting from their nominal orbits. Data: NASA FIRMS, {v.coverage.reduce((s, c) => s + c.detections, 0).toLocaleString()} screened detections from Terra, Aqua, Suomi NPP and NOAA-20 through {v.last_date}; the current year comes from the FIRMS API and its newest weeks are near-real-time data, corrected for static heat sources.
           </p>
         </div>
       </div>

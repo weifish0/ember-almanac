@@ -19,6 +19,7 @@ reconstruct the earliest VIIRS years from MODIS alone, compare with what VIIRS a
 
 Outputs: data/work/ratios.npz, data/work/validation.json, data/work/monthly.parquet
 """
+import datetime as dt
 import json
 import pathlib
 import sys
@@ -38,6 +39,7 @@ VIIRS_START = "2012-01-20"  # first S-NPP VIIRS 375 m detections
 K_GRID = [10, 30, 100, 300]
 STABLE_UNTIL = 2021         # last year before Terra/Aqua orbit drift affects detections
 N20_START = "2018-04-01"    # NOAA-20 VIIRS science-quality record begins
+LAST_ARCHIVE_YEAR = 2025     # later dates come from the API (step 0)
 
 
 def find_gaps(con) -> tuple[list[str], list[str], list[str]]:
@@ -179,7 +181,7 @@ def evaluate(hold: pd.DataFrame, pred: np.ndarray) -> dict:
 
 def main():
     con = duckdb.connect()
-    con.execute("SET threads TO 8")
+    con.execute("SET threads TO 24")
     if "--from-monthly" in sys.argv:   # quick local iteration without the gridded daily files
         m = con.execute(f"SELECT * FROM '{WORK}/monthly.parquet'").df()
         prev_report = json.loads((WORK / "validation.json").read_text())
@@ -196,6 +198,11 @@ def main():
     for r in cov:
         print("coverage", r)
     last_date = max(r[2] for r in cov)
+    if isinstance(last_date, str):
+        last_date = dt.date.fromisoformat(last_date)
+    if last_date.year > LAST_ARCHIVE_YEAR:
+        # the newest day from the API is still filling in when we fetch it: end the record the day before
+        last_date -= dt.timedelta(days=1)
 
     # Overlap era, complete calendar months only (VIIRS starts 20 Jan 2012).
     ov = m[(m["era"] == 2) & ~((m["year"] == 2012) & (m["month"] == 1))].copy()
@@ -329,7 +336,16 @@ def main():
         }
         for name, res in report["noaa20"]["methods"].items():
             print("NOAA-20", name, res["1deg_month"], res["5deg_year"], flush=True)
-        R_J = fit_ratio(dense(ovj, ovj["v"].to_numpy(float)), dense(ovj, ovj["j"].to_numpy(float)), best_k)
+        # Keep the simplest model the hold-out supports. The two VIIRS are the same instrument design, so a
+        # local ratio has little to add; it is used only if it clearly beats one global factor.
+        sc = {k: v["1deg_month"]["mdape"] for k, v in report["noaa20"]["methods"].items()}
+        if sc["hierarchical"] < sc["global_factor"] - 0.5:
+            report["noaa20"]["model"] = "hierarchical"
+            R_J = fit_ratio(dense(ovj, ovj["v"].to_numpy(float)), dense(ovj, ovj["j"].to_numpy(float)), best_k)
+        else:
+            report["noaa20"]["model"] = "global_factor"
+            R_J[:] = report["noaa20"]["global_ratio"]
+        print("NOAA-20 model:", report["noaa20"]["model"], report["noaa20"]["global_ratio"], flush=True)
     report["coverage"] = [{"sat": r[0], "first": str(r[1]), "last": str(r[2]), "detections": int(r[3])} for r in cov]
     np.savez_compressed(WORK / "ratios.npz", R_TA=R_TA, R_T=R_T, R_J=R_J)
     (WORK / "validation.json").write_text(json.dumps(report, indent=1))

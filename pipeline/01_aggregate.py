@@ -132,6 +132,22 @@ def build_recent() -> None:
         return
     con = duckdb.connect()
     year = LAST_ARCHIVE_YEAR + 1
+    # One row per (file, cell, day, satellite). If the API's date ranges shift between runs, two cached windows can
+    # cover the same day: keep the larger count instead of adding them, and prefer science-quality rows over
+    # near-real-time rows for any satellite-day that has both.
+    con.execute(
+        f"""
+        CREATE TABLE win AS
+        WITH per_file AS (
+          SELECT filename, cell, date, sat, typed, sum(n) AS n, sum(frp) AS frp
+          FROM read_parquet('{NRT}/*.parquet', filename = true) WHERE year(date) = {year} GROUP BY ALL),
+        typed_days AS (SELECT DISTINCT sat, date FROM per_file WHERE typed)
+        SELECT cell, date, sat, typed, max(n) AS n, max(frp) AS frp
+        FROM per_file p
+        WHERE typed OR NOT EXISTS (SELECT 1 FROM typed_days t WHERE t.sat = p.sat AND t.date = p.date)
+        GROUP BY ALL
+        """
+    )
     for sensor, sats in (("modis", "('T', 'A')"), ("viirs-snpp", "('N')"), ("viirs-jpss1", "('J')")):
         share = (
             f"(SELECT cell, sum(n_veg) / sum(n_all) AS share FROM read_parquet('{STATIC}/{sensor}_*.parquet') GROUP BY cell)"
@@ -143,8 +159,8 @@ def build_recent() -> None:
               SELECT w.cell, w.date, w.sat,
                      CAST(round(sum(CASE WHEN w.typed THEN w.n ELSE w.n * COALESCE(s.share, 1) END)) AS INTEGER) AS n,
                      CAST(sum(CASE WHEN w.typed THEN w.frp ELSE w.frp * COALESCE(s.share, 1) END) AS FLOAT) AS frp
-              FROM read_parquet('{NRT}/*.parquet') w LEFT JOIN {share} s USING (cell)
-              WHERE w.sat IN {sats} AND year(w.date) = {year}
+              FROM win w LEFT JOIN {share} s USING (cell)
+              WHERE w.sat IN {sats}
               GROUP BY ALL HAVING round(sum(CASE WHEN w.typed THEN w.n ELSE w.n * COALESCE(s.share, 1) END)) > 0
             ) TO '{out}' (FORMAT parquet, COMPRESSION zstd)
             """
@@ -152,7 +168,7 @@ def build_recent() -> None:
         r = con.execute(f"SELECT count(*), sum(n), min(date), max(date) FROM '{out}'").fetchone()
         print(f"{sensor} {year} (API): {r[1] or 0:,} detections, {r[0]:,} rows, {r[2]} .. {r[3]}", flush=True)
     kept = con.execute(
-        f"""SELECT sum(n), sum(n * COALESCE(s.share, 1)) FROM read_parquet('{NRT}/*.parquet') w
+        f"""SELECT sum(n), sum(n * COALESCE(s.share, 1)) FROM win w
             LEFT JOIN (SELECT cell, sum(n_veg) / sum(n_all) AS share FROM read_parquet('{STATIC}/*.parquet') GROUP BY cell) s
             USING (cell) WHERE NOT w.typed"""
     ).fetchone()

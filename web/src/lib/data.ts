@@ -18,7 +18,7 @@ export type Validation = {
   coverage: { sat: string; first: string; last: string; detections: number }[]
   last_date: string
   snpp_last_date?: string | null
-  noaa20?: { train_years: number[]; holdout_years: number[]; global_ratio: number; methods: Record<string, Record<string, Score>> }
+  noaa20?: { train_years: number[]; holdout_years: number[]; global_ratio: number; model?: string; methods: Record<string, Record<string, Score>> }
   final_fit_years?: [number, number]
   ratio_spread?: { p05: number; p50: number; p95: number }
 }

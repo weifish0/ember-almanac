@@ -61,8 +61,8 @@ def main():
     n20_sql = ", ".join(str(d) for d in n20_days) or "-1"
 
     con = duckdb.connect()
-    con.execute("SET threads TO 8")
-    con.execute("SET memory_limit = '12GB'")
+    con.execute("SET threads TO 24")
+    con.execute("SET memory_limit = '20GB'")
     cell, day, t, a, v, j = con.execute(
         f"""
         SELECT * FROM (
@@ -74,6 +74,7 @@ def main():
                  CAST(LEAST(65535, sum(CASE WHEN sat = 'J' AND date_diff('day', DATE '{EPOCH}', date) IN ({n20_sql})
                                             THEN n ELSE 0 END)) AS USMALLINT) AS j
           FROM read_parquet('{AGG}/*.parquet')
+          WHERE date <= DATE '{last_date}'
           GROUP BY cell, date)
         WHERE t + a + v + j > 0
         ORDER BY (cell // {NX} // {TILE}) * 36 + (cell % {NX}) // {TILE}, cell, day

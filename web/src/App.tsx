@@ -242,7 +242,7 @@ export default function App() {
             Ember Almanac
           </a>
           <p className="strap">
-            One fire record from two satellites. NASA MODIS and VIIRS hot spots, harmonized into a burning calendar for any place on Earth
+            One fire record across four satellites. NASA MODIS and VIIRS hot spots, harmonized into a burning calendar for any place on Earth
             {meta ? `, ${dayToDate(meta.firstDay).getUTCFullYear()}–${dayToDate(meta.lastDay).getUTCFullYear()}` : ''}.
           </p>
         </header>
@@ -275,7 +275,7 @@ export default function App() {
             <h1>{area.name ?? 'Custom area'}</h1>
             <p className="kicker">{bboxLabel(area.bbox)}</p>
             <div className="bar-track"><div className="bar-fill" style={{ transform: `scaleX(${progress ? Math.max(0.06, progress[0] / Math.max(1, progress[1])) : 0.06})` }} /></div>
-            <p className="lede">Reading 25 years of satellite passes…</p>
+            <p className="lede">Reading 26 years of satellite passes…</p>
           </div>
         )}
 
