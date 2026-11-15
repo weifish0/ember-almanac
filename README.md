@@ -79,7 +79,7 @@ The yearly chart in the app carries an 80% interval on every pre-2012 bar, taken
 - A detection is a hot pixel at overpass time. It is not a fire count and not a burned area.
 - Cloud and thick smoke hide fires from both sensors.
 - Harmonization restores *how much* burned, not the exact day. MODIS misses small fires outright, so the pre-2012 record should be read at weekly scale or coarser.
-- VIIRS itself has gaps. S-NPP returned no fire data from 27 July to 10 August 2022, for example. The pipeline found 75 such days before the mission ended: 69 are filled from NOAA-20 and 6 (in 2012, before NOAA-20 flew) from MODIS, all flagged.
+- VIIRS itself has gaps. S-NPP returned no fire data from 27 July to 10 August 2022, for example. The pipeline found 74 such days before the mission ended: 68 are filled from NOAA-20 and 6 (in 2012, before NOAA-20 flew) from MODIS, all flagged.
 - November 2000 – July 2002 had only Terra. Those months are drawn in the calendar but kept out of the season statistics, the trend and the episode ranking, which start in 2003.
 - The ratio is linear in MODIS detections. Very large fires add VIIRS pixels faster than MODIS pixels, so a region whose fires grew much larger after 2012 can be understated before 2012; the yearly interval is there for that reason.
 - The newest weeks are near-real-time data. They are corrected for static heat sources but have not been through science-quality reprocessing, and the final day is left out because it is still filling in. The published record runs to 14 November 2026; rerunning the pipeline extends it.

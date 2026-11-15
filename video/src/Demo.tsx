@@ -66,7 +66,7 @@ const EndScene: React.FC = () => {
     <AbsoluteFill style={{ background: C.paper, color: C.ink }}>
       {/* a strip of the real burning calendar */}
       <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 250, overflow: "hidden", opacity: 0.95 }}>
-        <Img src={staticFile("cap/panel.png")} style={{ position: "absolute", width: 780 * 3.06, left: -82 * 3.06, top: -(545 * 3.06) - lerp(0, 70, ramp(f, 0, 150, (t) => t)) }} />
+        <Img src={staticFile("cap/panel.png")} style={{ position: "absolute", width: 780 * 3.06, left: -82 * 3.06, top: -(605 * 3.06) - lerp(0, 70, ramp(f, 0, 150, (t) => t)) }} />
         <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, ${C.paper}00 55%, ${C.paper} 100%)` }} />
       </div>
       <div style={{ position: "absolute", left: 130, top: 330 }}>
@@ -77,7 +77,7 @@ const EndScene: React.FC = () => {
           <div style={{ font: `500 22px ${text}`, color: C.inkSoft }}>Open source · open data</div>
         </div>
         <div style={{ width: 1660, borderTop: `2px solid ${C.ink}`, marginTop: 56, paddingTop: 18, font: `500 21px/1.5 ${text}`, color: C.inkSoft, opacity: c }}>
-          Data: NASA FIRMS — MODIS Collection 6.1 and VIIRS S-NPP 375 m active fires, 333,901,564 detections, 2000–2025 · Imagery: NASA GIBS Blue Marble
+          Data: NASA FIRMS — MODIS Collection 6.1 and VIIRS 375 m (Suomi NPP, NOAA-20) active fires, 490,810,661 detections, Nov 2000 – Nov 2026 · Imagery: NASA GIBS Blue Marble
           <br />
           NASA Space Apps Challenge 2026 · Harmonization of MODIS and VIIRS Hot Spots
         </div>

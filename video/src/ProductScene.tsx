@@ -24,7 +24,7 @@ export const ProductScene: React.FC = () => {
   const scroll = interpolate(
     f,
     [0, 46, 78, sec(3.2), sec(3.2) + 26, sec(4.5), sec(4.5) + 28, 220],
-    [0, 0, 318, 318, 930, 930, 1700, 1730],
+    [0, 0, 390, 390, 1005, 1005, 1745, 1775],
     { extrapolateRight: "clamp", easing: io },
   );
   const tag = (from: number, to: number) => Math.min(ramp(f, from, from + 10), 1 - ramp(f, to - 8, to));

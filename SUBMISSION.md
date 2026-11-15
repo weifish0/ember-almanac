@@ -38,7 +38,7 @@ https://weifish0.github.io/ember-almanac/demo.mp4
 3. A hierarchy (global → 5° block → 1° cell → 0.25° cell) shrinks each ratio toward its parent with a gamma-Poisson prior, so busy cells keep their own ratio and sparse cells borrow from their neighbourhood.
 4. Ratios are learned only from 2012–2021, before Terra and Aqua began drifting from their nominal orbits.
 5. Before 2012 the record is MODIS × ratio (a separate ratio for the Terra-only months of 2000–02). From 2012 to 2 November 2026 it is Suomi NPP VIIRS as observed.
-6. After Suomi NPP stopped, and on 69 earlier days when it was down (found automatically: the global VIIRS/MODIS ratio sits near 4 every day, and below 2 means the sensor was not observing), the record continues on NOAA-20 VIIRS. We tested a local ratio for that hand-over against a single factor on held-out years; the local ratio did not help, so the simpler factor (1.018×) is used.
+6. After Suomi NPP stopped, and on 68 earlier days when it was down (found automatically: the global VIIRS/MODIS ratio sits near 4 every day, and below 2 means the sensor was not observing), the record continues on NOAA-20 VIIRS. We tested a local ratio for that hand-over against a single factor on held-out years; the local ratio did not help, so the simpler factor (1.018×) is used.
 7. The current year comes from the FIRMS API. Near-real-time detections have no fire-type label yet, so each cell's count is scaled by the share of vegetation fires that cell showed in 2023–2025, which removes gas flares, industry and volcanoes.
 8. The browser receives the raw counts of all four satellites plus the ratios and applies the harmonization itself, so every number can be inspected.
 

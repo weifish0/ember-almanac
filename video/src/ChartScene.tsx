@@ -140,7 +140,7 @@ export const ChartScene: React.FC = () => {
         <span><b style={{ color: C.onSoot }}>+{data.validation.bias}%</b> bias <span style={{ opacity: 0.7 }}>(raw splice: {data.validation.raw_bias}%)</span></span>
       </div>
       {/* the reference sensor has just retired: the record carries on with NOAA-20 */}
-      <div style={{ position: "absolute", right: 1920 - R, top: y(19.6e6) - 70, textAlign: "right", font: `600 26px ${text}`, color: C.onSoot, opacity: ramp(f, sec(11.5), sec(11.5) + 14) }}>
+      <div style={{ position: "absolute", right: 1920 - R, top: y(19.6e6) - 70, textAlign: "right", font: `600 26px ${text}`, color: C.onSoot, opacity: ramp(f, sec(10.9), sec(10.9) + 12) }}>
         2 Nov 2026: Suomi NPP falls silent <span style={{ color: C.straw }}>→ NOAA-20 carries the record on</span>
       </div>
       <div style={{ position: "absolute", left: x(0), top: y(19.6e6) - 70, color: C.straw, font: `600 26px ${text}`, opacity: ramp(f, sec(11.0), sec(11.0) + 14) }}>
